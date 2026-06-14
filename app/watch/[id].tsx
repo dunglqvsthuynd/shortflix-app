@@ -13,6 +13,7 @@ import {
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useLocalSearchParams, router } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowLeft, Volume2, VolumeX, Heart } from "lucide-react-native";
 import { getMovie, getEpisodes } from "../../src/data/catalog";
 import { useStore } from "../../src/store/AppStore";
@@ -49,6 +50,7 @@ function VideoPage({
 }) {
   const { height, width } = useWindowDimensions();
   const { t } = useT();
+  const insets = useSafeAreaInsets();
   const player = useVideoPlayer(episode.videoUrl, (p) => {
     p.loop = false;
     p.timeUpdateEventInterval = 1;
@@ -163,18 +165,29 @@ function VideoPage({
         </View>
       )}
 
-      {/* Bottom metadata (hidden in clean mode) */}
+      {/* Bottom metadata (hidden in clean mode) — kept clear of the sidebar and the
+          home indicator via safe-area insets so it never gets cut off / overlapped. */}
       {controlsVisible && (
-        <View className="absolute bottom-24 left-5 right-20" pointerEvents="none">
-          <Text className="text-white text-xl font-display">{title}</Text>
+        <View
+          className="absolute left-5 right-24"
+          style={{ bottom: insets.bottom + 80 }}
+          pointerEvents="none"
+        >
+          <Text className="text-white text-xl font-display" numberOfLines={2}>
+            {title}
+          </Text>
           <Text className="text-ink/70 text-xs mt-1">
             {t("watch.chapter")} {episode.number} {t("watch.of")} {episodeCount}
           </Text>
         </View>
       )}
 
-      {/* Thin playback progress bar (always visible) */}
-      <View className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/15" pointerEvents="none">
+      {/* Thin playback progress bar, sitting just above the system navigation area. */}
+      <View
+        className="absolute left-0 right-0 h-[3px] bg-white/15"
+        style={{ bottom: insets.bottom }}
+        pointerEvents="none"
+      >
         <View className="h-full bg-brand" style={{ width: `${pct}%` }} />
       </View>
     </View>
@@ -186,6 +199,7 @@ export default function Watch() {
   const { state, dispatch } = useStore();
   const { t } = useT();
   const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const movie = getMovie(String(id));
   const episodes = getEpisodes(String(id));
   const listRef = useRef<FlatList<Episode>>(null);
@@ -336,16 +350,25 @@ export default function Watch() {
       {/* Immersive overlay — hidden in clean mode (tap video to reveal, auto-hides after 5s). */}
       {controls && (
         <>
-          <View className="absolute top-0 left-0 right-0 h-32" pointerEvents="none">
-            <ScrimTop />
+          <View
+            className="absolute top-0 left-0 right-0"
+            style={{ height: insets.top + 72 }}
+            pointerEvents="none"
+          >
+            <ScrimTop height={insets.top + 72} />
           </View>
           <Pressable
             onPress={() => router.back()}
-            className="absolute top-14 left-5 w-10 h-10 rounded-full bg-black/40 items-center justify-center border border-white/10"
+            className="absolute left-5 w-10 h-10 rounded-full bg-black/40 items-center justify-center border border-white/10"
+            style={{ top: insets.top + 6 }}
           >
             <ArrowLeft size={20} color="#fff" />
           </Pressable>
-          <View className="absolute top-14 left-0 right-0 items-center" pointerEvents="none">
+          <View
+            className="absolute left-16 right-16 items-center"
+            style={{ top: insets.top + 6 }}
+            pointerEvents="none"
+          >
             <Text className="text-brand font-display text-lg">{t("appName")}</Text>
             <Text className="text-white/50 text-[10px] tracking-widest">
               {t("watch.chapter")} {active.number} {t("watch.of")} {episodes.length}
@@ -353,7 +376,8 @@ export default function Watch() {
           </View>
           <Pressable
             onPress={() => setMuted((m) => !m)}
-            className="absolute top-14 right-5 w-10 h-10 rounded-full bg-black/40 items-center justify-center border border-white/10"
+            className="absolute right-5 w-10 h-10 rounded-full bg-black/40 items-center justify-center border border-white/10"
+            style={{ top: insets.top + 6 }}
           >
             {muted ? <VolumeX size={18} color="#fff" /> : <Volume2 size={18} color="#fff" />}
           </Pressable>

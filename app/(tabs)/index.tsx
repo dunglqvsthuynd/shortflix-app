@@ -1,4 +1,4 @@
-import { ScrollView, View, Text, Pressable, FlatList } from "react-native";
+import { ScrollView, View, Text, Pressable, FlatList, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { Play } from "lucide-react-native";
@@ -12,6 +12,8 @@ import Badge from "../../src/components/Badge";
 export default function Home() {
   const { state } = useStore();
   const { t } = useT();
+  const { height } = useWindowDimensions();
+  const bannerH = Math.round(height * 0.58); // proportional banner, fits all screen sizes
   const movies = allMovies();
   const featured = movies[0];
   const genres = allGenres().slice(0, 5);
@@ -27,7 +29,7 @@ export default function Home() {
       showsVerticalScrollIndicator={false}
     >
       {featured && (
-        <Pressable onPress={() => router.push(`/detail/${featured.id}`)} className="h-[480px] w-full">
+        <Pressable onPress={() => router.push(`/detail/${featured.id}`)} className="w-full" style={{ height: bannerH }}>
           <Image source={featured.poster} style={{ flex: 1 }} contentFit="cover" />
           <View className="absolute inset-0">
             <ScrimBottom />

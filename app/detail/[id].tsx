@@ -1,6 +1,7 @@
-import { ScrollView, View, Text, Pressable } from "react-native";
+import { ScrollView, View, Text, Pressable, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, router } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowLeft, Play, Plus, Check } from "lucide-react-native";
 import { getMovie, getEpisodes, allMovies } from "../../src/data/catalog";
 import { useStore } from "../../src/store/AppStore";
@@ -14,6 +15,9 @@ export default function Detail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { state, dispatch } = useStore();
   const { t } = useT();
+  const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const posterH = Math.round(height * 0.52); // proportional hero, fits all screen sizes
   const movie = getMovie(String(id));
   if (!movie) return <View className="flex-1 bg-black" />;
 
@@ -34,14 +38,15 @@ export default function Detail() {
       contentContainerStyle={{ paddingBottom: 40 }}
       showsVerticalScrollIndicator={false}
     >
-      <View className="h-[420px]">
+      <View style={{ height: posterH }}>
         <Image source={movie.poster} style={{ flex: 1 }} contentFit="cover" />
         <View className="absolute inset-0">
           <ScrimBottom />
         </View>
         <Pressable
           onPress={() => router.back()}
-          className="absolute top-14 left-5 w-10 h-10 rounded-full bg-black/40 items-center justify-center border border-white/10"
+          className="absolute left-5 w-10 h-10 rounded-full bg-black/40 items-center justify-center border border-white/10"
+          style={{ top: insets.top + 6 }}
         >
           <ArrowLeft size={20} color="#fff" />
         </Pressable>

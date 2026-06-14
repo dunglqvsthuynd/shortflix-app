@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Heart, MessageSquare, Bookmark, Share2, List } from "lucide-react-native";
 import { useT } from "../i18n";
 
@@ -42,8 +43,9 @@ export default function WatchSidebar({
   onEpisodes,
 }: Props) {
   const { t } = useT();
+  const insets = useSafeAreaInsets();
   return (
-    <View className="absolute right-3 bottom-32 items-center">
+    <View className="absolute right-3 items-center" style={{ bottom: insets.bottom + 96 }}>
       <Item
         icon={<Heart size={24} color={liked ? "#E50914" : "#fff"} fill={liked ? "#E50914" : "transparent"} />}
         label={likeCount}
