@@ -126,7 +126,11 @@ export default function Watch() {
     dispatch({ type: "unlockEpisode", movieId: movie.id, number: target.number });
     const ti = pending;
     setPending(null);
-    setTimeout(() => goTo(ti), 50);
+    // The episode is now unlocked; navigate directly rather than via goTo,
+    // whose isUnlocked closure still references the pre-dispatch unlocked list.
+    listRef.current?.scrollToIndex({ index: ti, animated: true });
+    setIndex(ti);
+    setDrawer(false);
   };
 
   const unlockAll = () => {

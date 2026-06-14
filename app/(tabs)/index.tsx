@@ -63,7 +63,15 @@ export default function Home() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 20 }}
             renderItem={({ item }) => (
-              <Pressable onPress={() => router.push(`/watch/${item.movie!.id}`)} className="mr-3 w-44">
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: "/watch/[id]",
+                    params: { id: item.movie!.id, ep: String(item.c.episodeNumber) },
+                  })
+                }
+                className="mr-3 w-44"
+              >
                 <View className="h-24 rounded-xl overflow-hidden bg-surface">
                   <Image source={item.movie!.poster} style={{ flex: 1 }} contentFit="cover" />
                   <View className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
