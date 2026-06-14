@@ -27,6 +27,7 @@ export default function EpisodesDrawer({
   onUnlockAll,
 }: Props) {
   const { t } = useT();
+  const hasLocks = episodes.some((e) => !e.isFree); // hide Unlock All when nothing is locked
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable onPress={onClose} className="flex-1 bg-black/60 justify-end">
@@ -41,15 +42,17 @@ export default function EpisodesDrawer({
                 {title} • {t("watch.season")}
               </Text>
             </View>
-            <Pressable
-              onPress={onUnlockAll}
-              className="flex-row items-center bg-brand/10 border border-brand/30 px-3 py-1.5 rounded-lg"
-            >
-              <Zap size={14} color="#E50914" fill="#E50914" />
-              <Text className="text-brand text-xs font-sans-bold ml-1">
-                {t("watch.unlockAll")} ({UNLOCK_ALL_COST} 🪙)
-              </Text>
-            </Pressable>
+            {hasLocks && (
+              <Pressable
+                onPress={onUnlockAll}
+                className="flex-row items-center bg-brand/10 border border-brand/30 px-3 py-1.5 rounded-lg"
+              >
+                <Zap size={14} color="#E50914" fill="#E50914" />
+                <Text className="text-brand text-xs font-sans-bold ml-1">
+                  {t("watch.unlockAll")} ({UNLOCK_ALL_COST} 🪙)
+                </Text>
+              </Pressable>
+            )}
           </View>
           <ScrollView className="py-4">
             <EpisodeGrid

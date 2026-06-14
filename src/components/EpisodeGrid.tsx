@@ -12,6 +12,7 @@ interface Props {
 
 export default function EpisodeGrid({ episodes, unlocked, activeNumber, onPress }: Props) {
   const { t } = useT();
+  const hasLocks = episodes.some((e) => !e.isFree); // only flag FREE when some episodes are paid
   return (
     <View className="flex-row flex-wrap px-4">
       {episodes.map((ep) => {
@@ -32,7 +33,7 @@ export default function EpisodeGrid({ episodes, unlocked, activeNumber, onPress 
             <Text className={`font-display text-sm ${isActive ? "text-white" : "text-ink"}`}>
               {ep.number}
             </Text>
-            {ep.isFree && !isActive && (
+            {hasLocks && ep.isFree && !isActive && (
               <View className="absolute top-1 right-1 bg-green-600 px-1 rounded">
                 <Text className="text-white text-[7px] font-sans-bold">{t("detail.free")}</Text>
               </View>

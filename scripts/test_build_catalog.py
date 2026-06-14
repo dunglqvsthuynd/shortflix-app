@@ -70,7 +70,7 @@ def test_movie_without_episodes_is_skipped(tmp_path):
     assert movies == []
 
 
-def test_locked_episodes_after_three(tmp_path):
+def test_all_episodes_free_when_unlimited(tmp_path):
     src = tmp_path / "phim-json"; src.mkdir()
     out = tmp_path / "out"; out.mkdir()
     rows = [{"serial_number": i, "book_title": "T", "book_id": "B3",
@@ -79,4 +79,4 @@ def test_locked_episodes_after_three(tmp_path):
     _write(str(src), "t-episodes-summary.json", rows)
     bc.build(str(src), str(out))
     eps = json.load(open(out / "episodes.json", encoding="utf-8"))["B3"]
-    assert [e["isFree"] for e in eps] == [True, True, True, False, False]
+    assert all(e["isFree"] for e in eps)  # FREE_EPISODES is None -> nothing locked

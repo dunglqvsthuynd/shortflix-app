@@ -10,7 +10,7 @@ import os
 import sys
 import glob
 
-FREE_EPISODES = 3  # first N episodes free, mirrors web app (i < 3)
+FREE_EPISODES = None  # None = all episodes free (no lock); set an int to lock past N
 
 
 def _load(path):
@@ -59,7 +59,7 @@ def _episodes(summary_path):
             "duration": int(r.get("duration") or 0),
             "thumbnail": r.get("video_pic") or "",
             "videoUrl": url,
-            "isFree": n <= FREE_EPISODES,
+            "isFree": FREE_EPISODES is None or n <= FREE_EPISODES,
         })
     eps.sort(key=lambda e: e["number"])
     return eps
