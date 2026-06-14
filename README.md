@@ -69,6 +69,11 @@ downloaded on demand via `expo-asset` when a movie opens. Regenerate from the sc
 npm run build:subs   # parses ../http-proxy-lab/subtitles/<slug>/ep*_en.vtt
 ```
 
+The **CC button** on the Watch screen cycles **EN → VI → Off**. The source only ships
+English, so **Vietnamese is produced by on-demand machine translation** (`src/data/translate.ts`,
+Google's free endpoint) the first time an episode is viewed in VI, then **cached** per
+episode in AsyncStorage (needs network on first view only).
+
 ## Notes
 
 - First 3 episodes per series are free; the rest unlock with coins (10 each, or 100 for all). Mock wallet — no real payments.
