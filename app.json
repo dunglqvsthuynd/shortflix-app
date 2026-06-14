@@ -29,7 +29,8 @@
       "expo-video",
       "expo-image",
       "expo-localization",
-      "expo-font"
+      "expo-font",
+      "expo-splash-screen"
     ],
     "experiments": {
       "typedRoutes": false
