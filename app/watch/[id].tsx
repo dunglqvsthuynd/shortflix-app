@@ -16,6 +16,7 @@ import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowLeft, Volume2, VolumeX, Heart, Captions } from "lucide-react-native";
 import { getMovie, getEpisodes, getSubtitles, loadMovieSubtitles, Cue } from "../../src/data/catalog";
+import { translateCues } from "../../src/data/translate";
 import { useStore } from "../../src/store/AppStore";
 import { useT } from "../../src/i18n";
 import { Episode } from "../../src/types";
@@ -117,6 +118,11 @@ function VideoPageBase({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player, active, cues]);
+
+  // Clear any lingering line when the cue set changes (e.g. EN<->VI switch).
+  useEffect(() => {
+    setCue("");
+  }, [cues]);
 
   // Double-tap to like (heart burst) vs single-tap to toggle controls.
   const heart = useRef(new Animated.Value(0)).current;
@@ -268,8 +274,9 @@ export default function Watch() {
   const [drawer, setDrawer] = useState(false);
   const [liked, setLiked] = useState(false);
   const [muted, setMuted] = useState(false);
-  const [subtitlesOn, setSubtitlesOn] = useState(true);
-  const [, setSubsReady] = useState(false); // flip to re-render once subtitles asset is loaded
+  const [subMode, setSubMode] = useState<"off" | "en" | "vi">("en");
+  const [subsReady, setSubsReady] = useState(false); // true once subtitles asset is loaded
+  const [viCache, setViCache] = useState<Record<number, Cue[]>>({});
   const [pending, setPending] = useState<number | null>(null);
 
   useEffect(() => {
@@ -277,6 +284,28 @@ export default function Watch() {
       .then(() => setSubsReady(true))
       .catch(() => {});
   }, [id]);
+
+  // When Vietnamese subtitles are active, translate the current episode on demand (cached).
+  useEffect(() => {
+    if (subMode !== "vi" || !movie) return;
+    const ep = episodes[index];
+    if (!ep || viCache[ep.number]) return;
+    const en = getSubtitles(movie.id, ep.number);
+    if (!en) return;
+    let cancelled = false;
+    translateCues(en, movie.id, ep.number)
+      .then((vi) => {
+        if (!cancelled) setViCache((c) => ({ ...c, [ep.number]: vi }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subMode, index, movie, subsReady]);
+
+  const cycleSub = () =>
+    setSubMode((m) => (m === "en" ? "vi" : m === "vi" ? "off" : "en"));
   const [controls, setControls] = useState(true); // TikTok-style: tap to reveal, auto-hide after 5s
 
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -383,8 +412,14 @@ export default function Watch() {
               muted={muted}
               title={movie.title}
               poster={movie.poster}
-              cues={getSubtitles(movie.id, item.number)}
-              subtitlesOn={subtitlesOn}
+              cues={
+                subMode === "vi"
+                  ? viCache[item.number] ?? null
+                  : subMode === "en"
+                  ? getSubtitles(movie.id, item.number)
+                  : null
+              }
+              subtitlesOn={subMode !== "off"}
               episodeCount={episodes.length}
               controlsVisible={controls}
               onTap={toggleControls}
@@ -454,11 +489,16 @@ export default function Watch() {
             {muted ? <VolumeX size={18} color="#fff" /> : <Volume2 size={18} color="#fff" />}
           </Pressable>
           <Pressable
-            onPress={() => setSubtitlesOn((s) => !s)}
-            className="absolute w-10 h-10 rounded-full bg-black/40 items-center justify-center border border-white/10"
+            onPress={cycleSub}
+            className="absolute h-10 px-2 min-w-10 flex-row rounded-full bg-black/40 items-center justify-center border border-white/10"
             style={{ top: insets.top + 6, right: 64 }}
           >
-            <Captions size={18} color={subtitlesOn ? "#E50914" : "#fff"} />
+            <Captions size={18} color={subMode !== "off" ? "#E50914" : "#fff"} />
+            {subMode !== "off" && (
+              <Text className="text-white text-[10px] font-sans-bold ml-1">
+                {subMode === "vi" ? "VI" : "EN"}
+              </Text>
+            )}
           </Pressable>
 
           <WatchSidebar
