@@ -19,6 +19,8 @@ function VideoPage({
   active,
   title,
   episodeCount,
+  controlsVisible,
+  onTap,
   onProgress,
   onEnd,
 }: {
@@ -26,6 +28,8 @@ function VideoPage({
   active: boolean;
   title: string;
   episodeCount: number;
+  controlsVisible: boolean;
+  onTap: () => void;
   onProgress: (pct: number) => void;
   onEnd: () => void;
 }) {
@@ -61,12 +65,17 @@ function VideoPage({
   return (
     <View style={{ width, height }} className="bg-black">
       <VideoView player={player} style={{ flex: 1 }} contentFit="cover" nativeControls={false} />
-      <View className="absolute bottom-24 left-5 right-20">
-        <Text className="text-white text-xl font-display">{title}</Text>
-        <Text className="text-ink/70 text-xs mt-1">
-          {t("watch.chapter")} {episode.number} {t("watch.of")} {episodeCount}
-        </Text>
-      </View>
+      {/* Transparent tap-catcher above the native video surface (which would otherwise
+          swallow touches). Tap toggles the immersive (clean) overlay state. */}
+      <Pressable onPress={onTap} className="absolute inset-0" />
+      {controlsVisible && (
+        <View className="absolute bottom-24 left-5 right-20" pointerEvents="none">
+          <Text className="text-white text-xl font-display">{title}</Text>
+          <Text className="text-ink/70 text-xs mt-1">
+            {t("watch.chapter")} {episode.number} {t("watch.of")} {episodeCount}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -85,6 +94,30 @@ export default function Watch() {
   const [drawer, setDrawer] = useState(false);
   const [liked, setLiked] = useState(false);
   const [pending, setPending] = useState<number | null>(null);
+  const [controls, setControls] = useState(true); // TikTok-style: tap to reveal, auto-hide after 5s
+
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const armHide = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setControls(false), 5000);
+  }, []);
+  const toggleControls = useCallback(() => {
+    setControls((prev) => {
+      const next = !prev;
+      if (next) armHide();
+      else if (hideTimer.current) clearTimeout(hideTimer.current);
+      return next;
+    });
+  }, [armHide]);
+
+  // Show controls (and re-arm the 5s timer) on mount and whenever the active episode changes.
+  useEffect(() => {
+    setControls(true);
+    armHide();
+    return () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    };
+  }, [index, armHide]);
 
   const unlocked = state.unlockedEpisodes[String(id)] ?? [];
   const isUnlocked = useCallback(
@@ -162,6 +195,8 @@ export default function Watch() {
               active={i === index}
               title={movie.title}
               episodeCount={episodes.length}
+              controlsVisible={controls}
+              onTap={toggleControls}
               onProgress={(pct) =>
                 dispatch({
                   type: "recordProgress",
@@ -192,31 +227,36 @@ export default function Watch() {
         }
       />
 
-      <View className="absolute top-0 left-0 right-0 h-32">
-        <ScrimTop />
-      </View>
-      <Pressable
-        onPress={() => router.back()}
-        className="absolute top-14 left-5 w-10 h-10 rounded-full bg-black/40 items-center justify-center border border-white/10"
-      >
-        <ArrowLeft size={20} color="#fff" />
-      </Pressable>
-      <View className="absolute top-14 left-0 right-0 items-center">
-        <Text className="text-brand font-display text-lg">{t("appName")}</Text>
-        <Text className="text-white/50 text-[10px] tracking-widest">
-          {t("watch.chapter")} {active.number} {t("watch.of")} {episodes.length}
-        </Text>
-      </View>
+      {/* Immersive overlay — hidden in clean mode (tap video to reveal, auto-hides after 5s). */}
+      {controls && (
+        <>
+          <View className="absolute top-0 left-0 right-0 h-32" pointerEvents="none">
+            <ScrimTop />
+          </View>
+          <Pressable
+            onPress={() => router.back()}
+            className="absolute top-14 left-5 w-10 h-10 rounded-full bg-black/40 items-center justify-center border border-white/10"
+          >
+            <ArrowLeft size={20} color="#fff" />
+          </Pressable>
+          <View className="absolute top-14 left-0 right-0 items-center" pointerEvents="none">
+            <Text className="text-brand font-display text-lg">{t("appName")}</Text>
+            <Text className="text-white/50 text-[10px] tracking-widest">
+              {t("watch.chapter")} {active.number} {t("watch.of")} {episodes.length}
+            </Text>
+          </View>
 
-      <WatchSidebar
-        liked={liked}
-        favorited={fav}
-        likeCount={liked ? "12.5K" : "12.4K"}
-        onLike={() => setLiked((v) => !v)}
-        onFavorite={() => dispatch({ type: "toggleFavorite", movieId: movie.id })}
-        onShare={() => Share.share({ message: `${movie.title} on ShortFlix` })}
-        onEpisodes={() => setDrawer(true)}
-      />
+          <WatchSidebar
+            liked={liked}
+            favorited={fav}
+            likeCount={liked ? "12.5K" : "12.4K"}
+            onLike={() => setLiked((v) => !v)}
+            onFavorite={() => dispatch({ type: "toggleFavorite", movieId: movie.id })}
+            onShare={() => Share.share({ message: `${movie.title} on ShortFlix` })}
+            onEpisodes={() => setDrawer(true)}
+          />
+        </>
+      )}
 
       <EpisodesDrawer
         visible={drawer}
