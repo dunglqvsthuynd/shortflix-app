@@ -1,9 +1,19 @@
 import { useCallback, useRef, useState, useEffect } from "react";
-import { View, Text, Pressable, FlatList, useWindowDimensions, Share } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  FlatList,
+  useWindowDimensions,
+  Share,
+  ActivityIndicator,
+  Animated,
+  Easing,
+} from "react-native";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useLocalSearchParams, router } from "expo-router";
-import { ArrowLeft } from "lucide-react-native";
+import { ArrowLeft, Volume2, VolumeX, Heart } from "lucide-react-native";
 import { getMovie, getEpisodes } from "../../src/data/catalog";
 import { useStore } from "../../src/store/AppStore";
 import { useT } from "../../src/i18n";
@@ -17,19 +27,23 @@ import { UNLOCK_ONE_COST, UNLOCK_ALL_COST } from "../../src/store/defaults";
 function VideoPage({
   episode,
   active,
+  muted,
   title,
   episodeCount,
   controlsVisible,
   onTap,
+  onLike,
   onProgress,
   onEnd,
 }: {
   episode: Episode;
   active: boolean;
+  muted: boolean;
   title: string;
   episodeCount: number;
   controlsVisible: boolean;
   onTap: () => void;
+  onLike: () => void;
   onProgress: (pct: number) => void;
   onEnd: () => void;
 }) {
@@ -40,34 +54,116 @@ function VideoPage({
     p.timeUpdateEventInterval = 1;
   });
 
+  const [buffering, setBuffering] = useState(true);
+  const [pct, setPct] = useState(0);
+  const lastReported = useRef(-1);
+
   useEffect(() => {
     if (active) player.play();
     else player.pause();
   }, [active, player]);
 
   useEffect(() => {
-    const sub = player.addListener("timeUpdate", (e: { currentTime: number }) => {
-      if (!active) return;
+    player.muted = muted;
+  }, [muted, player]);
+
+  useEffect(() => {
+    const status = player.addListener("statusChange", (e: { status: string }) => {
+      setBuffering(e.status === "loading" || e.status === "idle");
+    });
+    const time = player.addListener("timeUpdate", (e: { currentTime: number }) => {
       const dur = player.duration || episode.duration || 1;
-      const pct = Math.min(100, Math.round(((e.currentTime ?? 0) / dur) * 100));
-      onProgress(pct);
+      const p = Math.min(100, ((e.currentTime ?? 0) / dur) * 100);
+      setPct(p);
+      if (!active) return;
+      const rounded = Math.round(p);
+      // Only report every ~2% to avoid a state/persist update every second.
+      if (Math.abs(rounded - lastReported.current) >= 2) {
+        lastReported.current = rounded;
+        onProgress(rounded);
+      }
     });
     const end = player.addListener("playToEnd", () => {
       if (active) onEnd();
     });
     return () => {
-      sub.remove();
+      status.remove();
+      time.remove();
       end.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player, active]);
 
+  // Double-tap to like (heart burst) vs single-tap to toggle controls.
+  const heart = useRef(new Animated.Value(0)).current;
+  const lastTap = useRef(0);
+  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const burstHeart = useCallback(() => {
+    heart.setValue(0);
+    Animated.timing(heart, {
+      toValue: 1,
+      duration: 750,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [heart]);
+
+  const handleTap = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTap.current < 280) {
+      if (tapTimer.current) {
+        clearTimeout(tapTimer.current);
+        tapTimer.current = null;
+      }
+      lastTap.current = 0;
+      onLike();
+      burstHeart();
+    } else {
+      lastTap.current = now;
+      tapTimer.current = setTimeout(() => {
+        onTap();
+        tapTimer.current = null;
+      }, 280);
+    }
+  }, [onLike, onTap, burstHeart]);
+
+  useEffect(() => () => {
+    if (tapTimer.current) clearTimeout(tapTimer.current);
+  }, []);
+
   return (
     <View style={{ width, height }} className="bg-black">
       <VideoView player={player} style={{ flex: 1 }} contentFit="cover" nativeControls={false} />
-      {/* Transparent tap-catcher above the native video surface (which would otherwise
-          swallow touches). Tap toggles the immersive (clean) overlay state. */}
-      <Pressable onPress={onTap} className="absolute inset-0" />
+
+      {/* Transparent tap-catcher above the native video surface. */}
+      <Pressable onPress={handleTap} className="absolute inset-0" />
+
+      {/* Double-tap heart burst */}
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          alignSelf: "center",
+          top: height / 2 - 60,
+          opacity: heart.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0, 0.95, 0] }),
+          transform: [{ scale: heart.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.7] }) }],
+        }}
+      >
+        <Heart size={120} color="#E50914" fill="#E50914" />
+      </Animated.View>
+
+      {/* Buffering spinner */}
+      {active && buffering && (
+        <View
+          pointerEvents="none"
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}
+        >
+          <ActivityIndicator size="large" color="#E50914" />
+        </View>
+      )}
+
+      {/* Bottom metadata (hidden in clean mode) */}
       {controlsVisible && (
         <View className="absolute bottom-24 left-5 right-20" pointerEvents="none">
           <Text className="text-white text-xl font-display">{title}</Text>
@@ -76,6 +172,11 @@ function VideoPage({
           </Text>
         </View>
       )}
+
+      {/* Thin playback progress bar (always visible) */}
+      <View className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/15" pointerEvents="none">
+        <View className="h-full bg-brand" style={{ width: `${pct}%` }} />
+      </View>
     </View>
   );
 }
@@ -93,6 +194,7 @@ export default function Watch() {
   const [index, setIndex] = useState(found < 0 ? 0 : found);
   const [drawer, setDrawer] = useState(false);
   const [liked, setLiked] = useState(false);
+  const [muted, setMuted] = useState(false);
   const [pending, setPending] = useState<number | null>(null);
   const [controls, setControls] = useState(true); // TikTok-style: tap to reveal, auto-hide after 5s
 
@@ -110,7 +212,7 @@ export default function Watch() {
     });
   }, [armHide]);
 
-  // Show controls (and re-arm the 5s timer) on mount and whenever the active episode changes.
+  // Reveal controls (and re-arm the 5s timer) on mount and whenever the active episode changes.
   useEffect(() => {
     setControls(true);
     armHide();
@@ -159,8 +261,6 @@ export default function Watch() {
     dispatch({ type: "unlockEpisode", movieId: movie.id, number: target.number });
     const ti = pending;
     setPending(null);
-    // The episode is now unlocked; navigate directly rather than via goTo,
-    // whose isUnlocked closure still references the pre-dispatch unlocked list.
     listRef.current?.scrollToIndex({ index: ti, animated: true });
     setIndex(ti);
     setDrawer(false);
@@ -184,6 +284,10 @@ export default function Watch() {
         showsVerticalScrollIndicator={false}
         initialScrollIndex={index}
         getItemLayout={(_, i) => ({ length: height, offset: height * i, index: i })}
+        onScrollToIndexFailed={({ index: i }) => {
+          // Fallback when a far-off target row isn't measured yet.
+          listRef.current?.scrollToOffset({ offset: i * height, animated: true });
+        }}
         onViewableItemsChanged={onViewable}
         viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
         windowSize={3}
@@ -193,10 +297,12 @@ export default function Watch() {
             <VideoPage
               episode={item}
               active={i === index}
+              muted={muted}
               title={movie.title}
               episodeCount={episodes.length}
               controlsVisible={controls}
               onTap={toggleControls}
+              onLike={() => setLiked(true)}
               onProgress={(pct) =>
                 dispatch({
                   type: "recordProgress",
@@ -245,6 +351,12 @@ export default function Watch() {
               {t("watch.chapter")} {active.number} {t("watch.of")} {episodes.length}
             </Text>
           </View>
+          <Pressable
+            onPress={() => setMuted((m) => !m)}
+            className="absolute top-14 right-5 w-10 h-10 rounded-full bg-black/40 items-center justify-center border border-white/10"
+          >
+            {muted ? <VolumeX size={18} color="#fff" /> : <Volume2 size={18} color="#fff" />}
+          </Pressable>
 
           <WatchSidebar
             liked={liked}

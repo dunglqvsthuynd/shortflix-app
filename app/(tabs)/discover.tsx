@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { View, Text, TextInput, FlatList, ScrollView } from "react-native";
+import { View, Text, TextInput, FlatList, ScrollView, useWindowDimensions } from "react-native";
 import { Search } from "lucide-react-native";
 import { allMovies, allGenres, searchMovies } from "../../src/data/catalog";
 import { useT } from "../../src/i18n";
@@ -10,6 +10,10 @@ import GenreChip from "../../src/components/GenreChip";
 export default function Discover() {
   const { t } = useT();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const GAP = 10;
+  const PAD = 16;
+  const cardW = Math.floor((width - PAD * 2 - GAP * 2) / 3); // 3 columns, responsive
   const [q, setQ] = useState("");
   const [genre, setGenre] = useState<string>("");
   const genres = useMemo(() => allGenres().slice(0, 14), []);
@@ -51,9 +55,9 @@ export default function Discover() {
         data={results}
         keyExtractor={(m) => m.id}
         numColumns={3}
-        columnWrapperStyle={{ paddingHorizontal: 16, justifyContent: "space-between" }}
-        contentContainerStyle={{ paddingBottom: 120 }}
-        renderItem={({ item }) => <PosterCard movie={item} width={112} />}
+        columnWrapperStyle={{ paddingHorizontal: PAD, gap: GAP }}
+        contentContainerStyle={{ paddingBottom: 120, rowGap: 14 }}
+        renderItem={({ item }) => <PosterCard movie={item} width={cardW} grid />}
         ListEmptyComponent={
           <Text className="text-ink/40 text-center mt-20">{t("discover.noResults")}</Text>
         }

@@ -23,6 +23,10 @@ export default function Detail() {
   const recommended = allMovies()
     .filter((m) => m.id !== movie.id && m.genres.some((g) => movie.genres.includes(g)))
     .slice(0, 12);
+  // Resume from the last-watched episode of this movie, if any.
+  const resumeEp = state.continueWatching.find((c) => c.movieId === movie.id)?.episodeNumber;
+  const openWatch = (n?: number) =>
+    router.push({ pathname: "/watch/[id]", params: { id: movie.id, ...(n ? { ep: String(n) } : {}) } });
 
   return (
     <ScrollView
@@ -53,11 +57,13 @@ export default function Detail() {
 
       <View className="flex-row px-5 mt-5 gap-3">
         <Pressable
-          onPress={() => router.push(`/watch/${movie.id}`)}
+          onPress={() => openWatch(resumeEp)}
           className="flex-1 bg-brand flex-row items-center justify-center py-3.5 rounded-full"
         >
           <Play size={16} color="#fff" fill="#fff" />
-          <Text className="text-white font-sans-bold ml-2">{t("detail.watchNow")}</Text>
+          <Text className="text-white font-sans-bold ml-2">
+            {resumeEp ? `${t("home.continueWatching")} · ${t("watch.chapter")} ${resumeEp}` : t("detail.watchNow")}
+          </Text>
         </Pressable>
         <Pressable
           onPress={() => dispatch({ type: "toggleFavorite", movieId: movie.id })}
@@ -75,7 +81,7 @@ export default function Detail() {
       <EpisodeGrid
         episodes={episodes}
         unlocked={unlocked}
-        onPress={(n) => router.push({ pathname: "/watch/[id]", params: { id: movie.id, ep: String(n) } })}
+        onPress={(n) => openWatch(n)}
       />
 
       <Carousel title={t("detail.youMightLike")} data={recommended} />

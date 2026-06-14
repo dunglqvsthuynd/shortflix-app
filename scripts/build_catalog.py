@@ -12,6 +12,11 @@ import glob
 
 FREE_EPISODES = None  # None = all episodes free (no lock); set an int to lock past N
 
+# tag_list category_id -> meaning. Keep only genre-like categories (in priority order);
+# drop actors (1001/1005), audience/gender (1000), region (1013), age rating (1015),
+# location (1023), plot-device (1024), and the noisy mood bucket (1012).
+GENRE_CATEGORIES = ["1010", "1010001", "1011", "1020", "1022"]
+
 
 def _load(path):
     with open(path, encoding="utf-8-sig") as f:
@@ -30,11 +35,20 @@ def _book_meta(full_path):
             break
     if not data:
         return None
-    genres = []
+    # Group tag texts by category, then emit genres in GENRE_CATEGORIES priority order.
+    by_cat = {}
     for t in data.get("tag_list") or []:
-        txt = t.get("text") if isinstance(t, dict) else t
-        if txt and txt not in genres:
-            genres.append(txt)
+        if not isinstance(t, dict):
+            continue
+        cid = str(t.get("category_id"))
+        txt = t.get("text")
+        if txt:
+            by_cat.setdefault(cid, []).append(txt)
+    genres = []
+    for cid in GENRE_CATEGORIES:
+        for txt in by_cat.get(cid, []):
+            if txt not in genres:
+                genres.append(txt)
     return {
         "id": data.get("book_id") or obj.get("book_id"),
         "title": (data.get("book_title") or obj.get("book_title") or "").strip(),

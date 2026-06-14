@@ -4,12 +4,20 @@ import { router } from "expo-router";
 import { Movie } from "../types";
 import Badge from "./Badge";
 
-export default function PosterCard({ movie, width = 130 }: { movie: Movie; width?: number }) {
+export default function PosterCard({
+  movie,
+  width = 130,
+  grid = false,
+}: {
+  movie: Movie;
+  width?: number;
+  grid?: boolean;
+}) {
   return (
     <Pressable
       onPress={() => router.push(`/detail/${movie.id}`)}
       style={{ width }}
-      className="mr-3 active:opacity-80"
+      className={`${grid ? "" : "mr-3"} active:opacity-80`}
     >
       <View className="rounded-xl overflow-hidden bg-surface" style={{ height: width * 1.5 }}>
         <Image source={movie.poster} style={{ flex: 1 }} contentFit="cover" transition={200} />

@@ -31,7 +31,13 @@ def test_build_produces_movie_and_episodes(tmp_path):
             "book_id": "B1", "book_title": "Demo",
             "special_desc": "A synopsis.",
             "book_pic": "poster.jpg", "collect_count": 100,
-            "tag_list": [{"text": "Drama"}, {"text": "Revenge"}],
+            "tag_list": [
+                {"text": "Drama", "category_id": "1010"},
+                {"text": "Revenge", "category_id": "1010001"},
+                {"text": "Jesse Morales", "category_id": "1001"},  # actor -> dropped
+                {"text": "Female", "category_id": "1000"},        # gender -> dropped
+                {"text": "China", "category_id": "1013"},         # region -> dropped
+            ],
         }}}],
     })
 

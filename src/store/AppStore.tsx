@@ -30,10 +30,15 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
+  // Debounce writes: progress updates fire ~once/sec during playback; without this we
+  // would hit AsyncStorage every second. A trailing 1s debounce coalesces bursts.
   useEffect(() => {
     if (!loaded.current || !state.hydrated) return;
-    const { hydrated, ...persist } = state;
-    AsyncStorage.setItem(PERSIST_KEY, JSON.stringify(persist)).catch(() => {});
+    const t = setTimeout(() => {
+      const { hydrated, ...persist } = state;
+      AsyncStorage.setItem(PERSIST_KEY, JSON.stringify(persist)).catch(() => {});
+    }, 1000);
+    return () => clearTimeout(t);
   }, [state]);
 
   return <StoreContext.Provider value={{ state, dispatch }}>{children}</StoreContext.Provider>;
