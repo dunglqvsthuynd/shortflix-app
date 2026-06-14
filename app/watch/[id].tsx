@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useEffect } from "react";
+import { memo, useCallback, useRef, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -25,11 +25,12 @@ import EpisodesDrawer from "../../src/components/EpisodesDrawer";
 import UnlockModal from "../../src/components/UnlockModal";
 import { UNLOCK_ONE_COST, UNLOCK_ALL_COST } from "../../src/store/defaults";
 
-function VideoPage({
+function VideoPageBase({
   episode,
   active,
   muted,
   title,
+  poster,
   episodeCount,
   controlsVisible,
   onTap,
@@ -41,6 +42,7 @@ function VideoPage({
   active: boolean;
   muted: boolean;
   title: string;
+  poster: string;
   episodeCount: number;
   controlsVisible: boolean;
   onTap: () => void;
@@ -54,6 +56,12 @@ function VideoPage({
   const player = useVideoPlayer(episode.videoUrl, (p) => {
     p.loop = false;
     p.timeUpdateEventInterval = 1;
+    // Faster startup: smaller forward buffer + prioritise time so playback begins ASAP.
+    p.bufferOptions = {
+      preferredForwardBufferDuration: 8,
+      minBufferForPlayback: 1,
+      prioritizeTimeOverSizeThreshold: true,
+    };
   });
 
   const [buffering, setBuffering] = useState(true);
@@ -138,6 +146,12 @@ function VideoPage({
     <View style={{ width, height }} className="bg-black">
       <VideoView player={player} style={{ flex: 1 }} contentFit="cover" nativeControls={false} />
 
+      {/* Poster (already cached from Home/Detail) covers the black surface while the
+          stream buffers, so opening/swiping feels instant instead of flashing black. */}
+      {buffering && (
+        <Image source={poster} style={{ position: "absolute", width: "100%", height: "100%" }} contentFit="cover" />
+      )}
+
       {/* Transparent tap-catcher above the native video surface. */}
       <Pressable onPress={handleTap} className="absolute inset-0" />
 
@@ -193,6 +207,20 @@ function VideoPage({
     </View>
   );
 }
+
+// Re-render a page only when its own meaningful inputs change (ignore parent-state churn
+// like the per-second progress dispatch or controls auto-hide on sibling pages).
+const VideoPage = memo(
+  VideoPageBase,
+  (a, b) =>
+    a.episode.number === b.episode.number &&
+    a.active === b.active &&
+    a.muted === b.muted &&
+    a.controlsVisible === b.controlsVisible &&
+    a.title === b.title &&
+    a.poster === b.poster &&
+    a.episodeCount === b.episodeCount
+);
 
 export default function Watch() {
   const { id, ep } = useLocalSearchParams<{ id: string; ep?: string }>();
@@ -304,8 +332,10 @@ export default function Watch() {
         }}
         onViewableItemsChanged={onViewable}
         viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
+        initialNumToRender={2}
         windowSize={3}
-        maxToRenderPerBatch={2}
+        maxToRenderPerBatch={1}
+        removeClippedSubviews
         renderItem={({ item, index: i }) =>
           isUnlocked(item) ? (
             <VideoPage
@@ -313,6 +343,7 @@ export default function Watch() {
               active={i === index}
               muted={muted}
               title={movie.title}
+              poster={movie.poster}
               episodeCount={episodes.length}
               controlsVisible={controls}
               onTap={toggleControls}
