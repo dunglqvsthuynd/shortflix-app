@@ -55,6 +55,20 @@ const player = useVideoPlayer(
 To confirm player wiring with a known-good stream, temporarily use Apple's sample:
 `https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8`
 
+## Subtitles
+
+English subtitles exist for 297 of the titles. Because expo-video can't side-load external
+WebVTT (the HLS manifests carry no subtitle track), the app renders them with a **custom
+overlay** synced to playback time, toggled by the **CC** button on the Watch screen.
+
+To keep the JS bundle small, subtitles ship as one small bundled **asset per movie**
+(`src/data/subs/<bookId>.bin`, ~70KB each) plus a static require map (`src/data/subsMap.ts`),
+downloaded on demand via `expo-asset` when a movie opens. Regenerate from the scrape with:
+
+```bash
+npm run build:subs   # parses ../http-proxy-lab/subtitles/<slug>/ep*_en.vtt
+```
+
 ## Notes
 
 - First 3 episodes per series are free; the rest unlock with coins (10 each, or 100 for all). Mock wallet — no real payments.

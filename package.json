@@ -48,6 +48,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build:catalog": "python scripts/build_catalog.py",
+    "build:subs": "python scripts/build_subtitles.py",
     "test": "jest",
     "typecheck": "tsc --noEmit"
   },
