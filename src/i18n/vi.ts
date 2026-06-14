@@ -4,7 +4,7 @@ const vi: Dict = {
   appName: "ShortFlix",
   nav: { home: "Trang chủ", discover: "Khám phá", watch: "Xem", rewards: "Phần thưởng", profile: "Hồ sơ" },
   home: { continueWatching: "Tiếp tục xem", trending: "Đang thịnh hành", featured: "Nổi bật", playNow: "Xem ngay", forYou: "Dành cho bạn" },
-  discover: { title: "Khám phá", searchPlaceholder: "Tìm phim", all: "Tất cả", noResults: "Không tìm thấy kết quả" },
+  discover: { title: "Khám phá", searchPlaceholder: "Tìm tên phim hoặc thể loại", all: "Tất cả", noResults: "Không tìm thấy kết quả" },
   detail: { watchNow: "Xem ngay", episodes: "Tập phim", addToList: "Thêm vào danh sách", inList: "Đã thêm", youMightLike: "Có thể bạn thích", free: "MIỄN PHÍ" },
   watch: { chapter: "TẬP", of: "/", episodesSelection: "Chọn tập", unlockAll: "Mở tất cả", watchNextIn: "Tập sau sau 5 giây", watchNow: "Xem ngay", share: "Chia sẻ", episodes: "Tập phim", season: "Phần 1" },
   unlock: { title: "Mở khóa tập", body: "Tập này đang bị khóa. Mở ngay với 10 xu để tiếp tục xem.", cancel: "Hủy", confirm: "Xác nhận", insufficient: "Không đủ xu. Nạp thêm ở mục Hồ sơ." },

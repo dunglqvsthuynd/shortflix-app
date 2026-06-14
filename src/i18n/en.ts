@@ -2,7 +2,7 @@ const en = {
   appName: "ShortFlix",
   nav: { home: "Home", discover: "Discover", watch: "Watch", rewards: "Rewards", profile: "Profile" },
   home: { continueWatching: "Continue Watching", trending: "Trending Now", featured: "Featured", playNow: "Play Now", forYou: "For You" },
-  discover: { title: "Discover", searchPlaceholder: "Search titles", all: "All", noResults: "No results found" },
+  discover: { title: "Discover", searchPlaceholder: "Search titles or genres", all: "All", noResults: "No results found" },
   detail: { watchNow: "Watch Now", episodes: "Episodes", addToList: "Add to My List", inList: "In My List", youMightLike: "You Might Like", free: "FREE" },
   watch: { chapter: "CHAPTER", of: "OF", episodesSelection: "Episodes Selection", unlockAll: "Unlock All", watchNextIn: "Watch Next in 5s", watchNow: "Watch Now", share: "Share", episodes: "Episodes", season: "Season 1" },
   unlock: { title: "Unlock Episode", body: "This chapter is locked. Unlock instantly for 10 coins to continue streaming.", cancel: "Cancel", confirm: "Confirm", insufficient: "Insufficient coin balance. Recharge in Profile." },

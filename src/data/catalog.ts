@@ -36,5 +36,12 @@ export function moviesByGenre(genre: string): Movie[] {
 export function searchMovies(query: string): Movie[] {
   const q = query.trim().toLowerCase();
   if (!q) return MOVIES;
-  return MOVIES.filter((m) => m.title.toLowerCase().includes(q));
+  // Match title OR any genre/tag; title hits rank above genre-only hits.
+  const titleHits: Movie[] = [];
+  const genreHits: Movie[] = [];
+  for (const m of MOVIES) {
+    if (m.title.toLowerCase().includes(q)) titleHits.push(m);
+    else if (m.genres.some((g) => g.toLowerCase().includes(q))) genreHits.push(m);
+  }
+  return [...titleHits, ...genreHits];
 }
