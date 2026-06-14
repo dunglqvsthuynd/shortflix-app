@@ -14,8 +14,8 @@ import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeft, Volume2, VolumeX, Heart } from "lucide-react-native";
-import { getMovie, getEpisodes } from "../../src/data/catalog";
+import { ArrowLeft, Volume2, VolumeX, Heart, Captions } from "lucide-react-native";
+import { getMovie, getEpisodes, getSubtitles, loadMovieSubtitles, Cue } from "../../src/data/catalog";
 import { useStore } from "../../src/store/AppStore";
 import { useT } from "../../src/i18n";
 import { Episode } from "../../src/types";
@@ -31,6 +31,8 @@ function VideoPageBase({
   muted,
   title,
   poster,
+  cues,
+  subtitlesOn,
   episodeCount,
   controlsVisible,
   onTap,
@@ -43,6 +45,8 @@ function VideoPageBase({
   muted: boolean;
   title: string;
   poster: string;
+  cues: Cue[] | null;
+  subtitlesOn: boolean;
   episodeCount: number;
   controlsVisible: boolean;
   onTap: () => void;
@@ -53,9 +57,10 @@ function VideoPageBase({
   const { height, width } = useWindowDimensions();
   const { t } = useT();
   const insets = useSafeAreaInsets();
+  const [cue, setCue] = useState("");
   const player = useVideoPlayer(episode.videoUrl, (p) => {
     p.loop = false;
-    p.timeUpdateEventInterval = 1;
+    p.timeUpdateEventInterval = 0.3; // finer ticks so subtitles track speech closely
     // Faster startup: smaller forward buffer + prioritise time so playback begins ASAP.
     p.bufferOptions = {
       preferredForwardBufferDuration: 8,
@@ -82,9 +87,18 @@ function VideoPageBase({
       setBuffering(e.status === "loading" || e.status === "idle");
     });
     const time = player.addListener("timeUpdate", (e: { currentTime: number }) => {
+      const cur = e.currentTime ?? 0;
       const dur = player.duration || episode.duration || 1;
-      const p = Math.min(100, ((e.currentTime ?? 0) / dur) * 100);
+      const p = Math.min(100, (cur / dur) * 100);
       setPct(p);
+
+      // Active subtitle cue for the current time (cues sorted by start).
+      if (cues && cues.length) {
+        const cs = cur * 100;
+        const hit = cues.find((c) => cs >= c[0] && cs <= c[1]);
+        setCue((prev) => (hit ? (prev === hit[2] ? prev : hit[2]) : prev === "" ? prev : ""));
+      }
+
       if (!active) return;
       const rounded = Math.round(p);
       // Only report every ~2% to avoid a state/persist update every second.
@@ -102,7 +116,7 @@ function VideoPageBase({
       end.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [player, active]);
+  }, [player, active, cues]);
 
   // Double-tap to like (heart burst) vs single-tap to toggle controls.
   const heart = useRef(new Animated.Value(0)).current;
@@ -179,6 +193,21 @@ function VideoPageBase({
         </View>
       )}
 
+      {/* Subtitles — custom overlay (expo-video can't side-load external VTT). Always
+          visible (even in clean mode); rides higher when controls show so it never
+          overlaps the title block. */}
+      {subtitlesOn && cue !== "" && (
+        <View
+          className="absolute left-4 right-20 items-center"
+          style={{ bottom: insets.bottom + (controlsVisible ? 150 : 96) }}
+          pointerEvents="none"
+        >
+          <Text className="text-white text-[15px] font-sans-bold text-center bg-black/55 px-2 py-1 rounded-md leading-snug">
+            {cue}
+          </Text>
+        </View>
+      )}
+
       {/* Bottom metadata (hidden in clean mode) — kept clear of the sidebar and the
           home indicator via safe-area insets so it never gets cut off / overlapped. */}
       {controlsVisible && (
@@ -217,6 +246,8 @@ const VideoPage = memo(
     a.active === b.active &&
     a.muted === b.muted &&
     a.controlsVisible === b.controlsVisible &&
+    a.subtitlesOn === b.subtitlesOn &&
+    a.cues === b.cues &&
     a.title === b.title &&
     a.poster === b.poster &&
     a.episodeCount === b.episodeCount
@@ -237,7 +268,15 @@ export default function Watch() {
   const [drawer, setDrawer] = useState(false);
   const [liked, setLiked] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [subtitlesOn, setSubtitlesOn] = useState(true);
+  const [, setSubsReady] = useState(false); // flip to re-render once subtitles asset is loaded
   const [pending, setPending] = useState<number | null>(null);
+
+  useEffect(() => {
+    loadMovieSubtitles(String(id))
+      .then(() => setSubsReady(true))
+      .catch(() => {});
+  }, [id]);
   const [controls, setControls] = useState(true); // TikTok-style: tap to reveal, auto-hide after 5s
 
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -344,6 +383,8 @@ export default function Watch() {
               muted={muted}
               title={movie.title}
               poster={movie.poster}
+              cues={getSubtitles(movie.id, item.number)}
+              subtitlesOn={subtitlesOn}
               episodeCount={episodes.length}
               controlsVisible={controls}
               onTap={toggleControls}
@@ -396,7 +437,7 @@ export default function Watch() {
             <ArrowLeft size={20} color="#fff" />
           </Pressable>
           <View
-            className="absolute left-16 right-16 items-center"
+            className="absolute left-28 right-28 items-center"
             style={{ top: insets.top + 6 }}
             pointerEvents="none"
           >
@@ -411,6 +452,13 @@ export default function Watch() {
             style={{ top: insets.top + 6 }}
           >
             {muted ? <VolumeX size={18} color="#fff" /> : <Volume2 size={18} color="#fff" />}
+          </Pressable>
+          <Pressable
+            onPress={() => setSubtitlesOn((s) => !s)}
+            className="absolute w-10 h-10 rounded-full bg-black/40 items-center justify-center border border-white/10"
+            style={{ top: insets.top + 6, right: 64 }}
+          >
+            <Captions size={18} color={subtitlesOn ? "#E50914" : "#fff"} />
           </Pressable>
 
           <WatchSidebar
