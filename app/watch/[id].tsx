@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState, useEffect } from "react";
+import { memo, useCallback, useMemo, useRef, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,12 +9,14 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  PanResponder,
 } from "react-native";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeft, Volume2, VolumeX, Heart, Captions } from "lucide-react-native";
+import { ArrowLeft, Volume2, VolumeX, Heart, Captions, FastForward, Lock, Play } from "lucide-react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import {
   getMovie,
   getEpisodes,
@@ -25,16 +27,27 @@ import {
   getViSubtitles,
   viBadge,
   displayTitle,
+  formatCount,
   Cue,
 } from "../../src/data/catalog";
 import { translateCues } from "../../src/data/translate";
+import { baseLikes, seedComments } from "../../src/data/social";
 import { useStore } from "../../src/store/AppStore";
 import { useT } from "../../src/i18n";
 import { useViCatalog } from "../../src/data/catalogVi";
-import { Episode } from "../../src/types";
+import { Comment, Episode } from "../../src/types";
 import { ScrimTop } from "../../src/components/Scrim";
 import WatchSidebar from "../../src/components/WatchSidebar";
 import EpisodesDrawer from "../../src/components/EpisodesDrawer";
+import CommentsSheet from "../../src/components/CommentsSheet";
+
+/** Seconds → m:ss for the scrubber time labels. */
+function fmtTime(s: number): string {
+  if (!isFinite(s) || s < 0) s = 0;
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec < 10 ? "0" : ""}${sec}`;
+}
 
 // timeUpdate only fires ~3×/sec (every timeUpdateEventInterval), so the active cue is
 // recomputed on a coarse grid and shows up to one interval late — which reads as the
@@ -46,7 +59,10 @@ function VideoPageBase({
   episode,
   active,
   muted,
+  paused,
   title,
+  description,
+  hashtags,
   viLabel,
   poster,
   cues,
@@ -61,7 +77,10 @@ function VideoPageBase({
   episode: Episode;
   active: boolean;
   muted: boolean;
+  paused: boolean;
   title: string;
+  description: string;
+  hashtags: string[];
   viLabel: "dub" | "sub" | null;
   poster: string;
   cues: Cue[] | null;
@@ -93,10 +112,59 @@ function VideoPageBase({
   const lastReported = useRef(-1);
   const pctShown = useRef(-1);
 
+  // Scrubbing (drag-to-seek). While the user drags, timeUpdate must not move the bar.
+  const [dur, setDur] = useState(episode.duration || 0);
+  const durRef = useRef(dur);
+  durRef.current = dur;
+  const [scrubbing, setScrubbing] = useState(false);
+  const scrubbingRef = useRef(false);
+  const [scrubPct, setScrubPct] = useState(0);
+  const scrubPctRef = useRef(0);
+  const barW = useRef(0);
+
+  const setScrub = useCallback(
+    (x: number) => {
+      const w = barW.current || 1;
+      const p = Math.max(0, Math.min(100, (x / w) * 100));
+      scrubPctRef.current = p;
+      setScrubPct(p);
+    },
+    []
+  );
+
+  const commitScrub = useCallback(() => {
+    const target = (scrubPctRef.current / 100) * (durRef.current || 1);
+    try {
+      player.currentTime = target;
+    } catch {
+      // ignore if player not ready
+    }
+    pctShown.current = Math.round(scrubPctRef.current);
+    setPct(Math.round(scrubPctRef.current));
+    scrubbingRef.current = false;
+    setScrubbing(false);
+  }, [player]);
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (e) => {
+        scrubbingRef.current = true;
+        setScrubbing(true);
+        setScrub(e.nativeEvent.locationX);
+      },
+      onPanResponderMove: (e) => setScrub(e.nativeEvent.locationX),
+      onPanResponderRelease: commitScrub,
+      onPanResponderTerminate: commitScrub,
+    })
+  ).current;
+
   useEffect(() => {
-    if (active) player.play();
+    if (active && !paused) player.play();
     else player.pause();
-  }, [active, player]);
+  }, [active, paused, player]);
 
   useEffect(() => {
     player.muted = muted;
@@ -108,12 +176,15 @@ function VideoPageBase({
     });
     const time = player.addListener("timeUpdate", (e: { currentTime: number }) => {
       const cur = e.currentTime ?? 0;
-      const dur = player.duration || episode.duration || 1;
-      const p = Math.min(100, (cur / dur) * 100);
+      const d = player.duration || episode.duration || 1;
+      // Publish the real duration once known so the scrubber's time labels are correct.
+      if (d > 1 && Math.abs(d - durRef.current) > 0.5) setDur(d);
+      const p = Math.min(100, (cur / d) * 100);
       // Only re-render the progress bar when the whole-percent changes (not every tick),
-      // so the ~3/sec timeUpdate doesn't churn re-renders and stutter playback.
+      // so the ~3/sec timeUpdate doesn't churn re-renders and stutter playback. Freeze it
+      // while the user is dragging the scrubber so the thumb follows the finger, not the video.
       const rp = Math.round(p);
-      if (rp !== pctShown.current) {
+      if (!scrubbingRef.current && rp !== pctShown.current) {
         pctShown.current = rp;
         setPct(rp);
       }
@@ -151,11 +222,8 @@ function VideoPageBase({
     setCue("");
   }, [cues]);
 
-  // Double-tap to like (heart burst) vs single-tap to toggle controls.
+  // Double-tap heart burst animation.
   const heart = useRef(new Animated.Value(0)).current;
-  const lastTap = useRef(0);
-  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const burstHeart = useCallback(() => {
     heart.setValue(0);
     Animated.timing(heart, {
@@ -166,28 +234,94 @@ function VideoPageBase({
     }).start();
   }, [heart]);
 
-  const handleTap = useCallback(() => {
-    const now = Date.now();
-    if (now - lastTap.current < 280) {
-      if (tapTimer.current) {
-        clearTimeout(tapTimer.current);
-        tapTimer.current = null;
-      }
-      lastTap.current = 0;
-      onLike();
-      burstHeart();
-    } else {
-      lastTap.current = now;
-      tapTimer.current = setTimeout(() => {
-        onTap();
-        tapTimer.current = null;
-      }, 280);
-    }
-  }, [onLike, onTap, burstHeart]);
+  // Press-and-hold to play at 2× (TikTok-style). While holding, a vertical swipe locks the
+  // 2× on (swipe down) or unlocks it (swipe up) so playback keeps doubling after release.
+  const [fast, setFast] = useState(false); // 2× indicator visible (holding or locked)
+  const [locked, setLocked] = useState(false);
+  const holdingRef = useRef(false);
+  const lockedRef = useRef(false);
+  const startYRef = useRef(0); // touch Y when the hold engaged, for lock/unlock swipe
 
-  useEffect(() => () => {
-    if (tapTimer.current) clearTimeout(tapTimer.current);
-  }, []);
+  const setRate = useCallback(
+    (r: number) => {
+      try {
+        player.playbackRate = r;
+      } catch {
+        // player not ready yet
+      }
+    },
+    [player]
+  );
+
+  const engage2x = useCallback(() => {
+    holdingRef.current = true;
+    setRate(2);
+    setFast(true);
+  }, [setRate]);
+
+  const release2x = useCallback(() => {
+    holdingRef.current = false;
+    if (!lockedRef.current) {
+      setRate(1);
+      setFast(false);
+    }
+  }, [setRate]);
+
+  // Gestures (react-native-gesture-handler — composes with the FlatList paging without the
+  // responder-termination fight a raw PanResponder runs into). runOnJS so the callbacks can
+  // touch React state / the player directly. Single tap = play/pause, double tap = like,
+  // long-press = 2× with vertical-swipe lock/unlock.
+  const gesture = useMemo(() => {
+    const single = Gesture.Tap()
+      .runOnJS(true)
+      .maxDuration(250)
+      .onEnd((_e, ok) => {
+        if (ok) onTap();
+      });
+    const dbl = Gesture.Tap()
+      .runOnJS(true)
+      .numberOfTaps(2)
+      .maxDuration(280)
+      .onEnd((_e, ok) => {
+        if (ok) {
+          onLike();
+          burstHeart();
+        }
+      });
+    const hold = Gesture.LongPress()
+      .runOnJS(true)
+      .minDuration(250)
+      .maxDistance(10000) // don't cancel on movement — we use movement to lock/unlock
+      .onStart((e) => {
+        startYRef.current = e.y;
+        engage2x();
+      })
+      .onTouchesMove((e) => {
+        const tt = e.changedTouches[0] || e.allTouches[0];
+        if (!tt) return;
+        const dy = tt.y - startYRef.current;
+        if (dy > 50 && !lockedRef.current) {
+          lockedRef.current = true;
+          setLocked(true);
+        } else if (dy < -50 && lockedRef.current) {
+          lockedRef.current = false;
+          setLocked(false);
+        }
+      })
+      .onFinalize(() => release2x());
+    return Gesture.Exclusive(dbl, hold, single);
+  }, [onTap, onLike, burstHeart, engage2x, release2x]);
+
+  // Reset speed when this page is no longer the active one (swiped away while locked).
+  useEffect(() => {
+    if (!active) {
+      holdingRef.current = false;
+      lockedRef.current = false;
+      setFast(false);
+      setLocked(false);
+      setRate(1);
+    }
+  }, [active, setRate]);
 
   return (
     <View style={{ width, height }} className="bg-black">
@@ -199,8 +333,40 @@ function VideoPageBase({
         <Image source={poster} style={{ position: "absolute", width: "100%", height: "100%" }} contentFit="cover" />
       )}
 
-      {/* Transparent tap-catcher above the native video surface. */}
-      <Pressable onPress={handleTap} className="absolute inset-0" />
+      {/* Transparent gesture-catcher above the native video surface: tap (play/pause),
+          double-tap (like) and press-and-hold (2×) all run through this detector. */}
+      <GestureDetector gesture={gesture}>
+        <View className="absolute inset-0" />
+      </GestureDetector>
+
+      {/* Center play icon while paused (tap again to resume). */}
+      {active && paused && (
+        <View pointerEvents="none" className="absolute inset-0 items-center justify-center">
+          <View className="w-[68px] h-[68px] rounded-full bg-black/45 items-center justify-center">
+            <Play size={32} color="#fff" fill="#fff" />
+          </View>
+        </View>
+      )}
+
+      {/* 2× speed indicator (press-and-hold). Stays up while locked. */}
+      {fast && (
+        <View
+          pointerEvents="none"
+          className="absolute left-0 right-0 items-center"
+          style={{ top: insets.top + 56 }}
+        >
+          <View className="flex-row items-center bg-black/70 rounded-full px-3.5 py-1.5">
+            <FastForward size={15} color="#fff" fill="#fff" />
+            <Text className="text-white text-xs font-sans-bold ml-1.5">2x</Text>
+            {locked && (
+              <View className="flex-row items-center ml-2 pl-2 border-l border-white/20">
+                <Lock size={11} color="#E50914" />
+                <Text className="text-brand text-[10px] font-sans-bold ml-1">{t("watch.locked")}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
 
       {/* Double-tap heart burst */}
       <Animated.View
@@ -226,13 +392,12 @@ function VideoPageBase({
         </View>
       )}
 
-      {/* Subtitles — custom overlay (expo-video can't side-load external VTT). Always
-          visible (even in clean mode); rides higher when controls show so it never
-          overlaps the title block. */}
+      {/* Subtitles — custom overlay (expo-video can't side-load external VTT). Always visible;
+          rides higher when the controls show so it never overlaps the title block + scrubber. */}
       {subtitlesOn && cue !== "" && (
         <View
           className="absolute left-4 right-20 items-center"
-          style={{ bottom: insets.bottom + (controlsVisible ? 150 : 96) }}
+          style={{ bottom: insets.bottom + (controlsVisible ? 168 : 40) }}
           pointerEvents="none"
         >
           <Text className="text-white text-[15px] font-sans-bold text-center bg-black/55 px-2 py-1 rounded-md leading-snug">
@@ -241,8 +406,8 @@ function VideoPageBase({
         </View>
       )}
 
-      {/* Bottom metadata (hidden in clean mode) — kept clear of the sidebar and the
-          home indicator via safe-area insets so it never gets cut off / overlapped. */}
+      {/* Bottom metadata — shown with the controls (YouTube-style auto-hide), kept clear of the
+          sidebar and the home indicator via safe-area insets so it never gets cut off. */}
       {controlsVisible && (
         <View
           className="absolute left-5 right-24"
@@ -266,17 +431,57 @@ function VideoPageBase({
           <Text className="text-ink/70 text-xs mt-1">
             {t("watch.chapter")} {episode.number} {t("watch.of")} {episodeCount}
           </Text>
+          {description ? (
+            <Text className="text-white/80 text-xs mt-1.5 leading-snug" numberOfLines={2}>
+              {description}
+            </Text>
+          ) : null}
+          {hashtags.length > 0 && (
+            <Text className="text-white text-xs mt-1.5 font-sans-bold" numberOfLines={1}>
+              {hashtags.map((h) => `#${h.replace(/\s+/g, "")}`).join("  ")}
+            </Text>
+          )}
         </View>
       )}
 
-      {/* Thin playback progress bar, sitting just above the system navigation area. */}
-      <View
-        className="absolute left-0 right-0 h-[3px] bg-white/15"
-        style={{ bottom: insets.bottom }}
-        pointerEvents="none"
-      >
-        <View className="h-full bg-brand" style={{ width: `${pct}%` }} />
-      </View>
+      {/* Draggable scrubber (thumb + time labels). Hidden entirely with the rest of the
+          controls — nothing is left on screen in clean mode. */}
+      {controlsVisible && (
+        <View className="absolute left-0 right-0" style={{ bottom: insets.bottom }}>
+          <View className="flex-row justify-between px-4 mb-1">
+            <Text className="text-white text-[11px] font-sans-bold">
+              {fmtTime(((scrubbing ? scrubPct : pct) / 100) * (dur || 0))}
+            </Text>
+            <Text className="text-white/60 text-[11px]">{fmtTime(dur)}</Text>
+          </View>
+          <View
+            {...pan.panHandlers}
+            onLayout={(e) => (barW.current = e.nativeEvent.layout.width)}
+            className="h-7 justify-center"
+          >
+            <View className="h-[4px] bg-white/25 mx-0">
+              <View
+                className="h-full bg-brand"
+                style={{ width: `${scrubbing ? scrubPct : pct}%` }}
+              />
+            </View>
+            <View
+              pointerEvents="none"
+              className="absolute"
+              style={{
+                left: `${scrubbing ? scrubPct : pct}%`,
+                marginLeft: scrubbing ? -9 : -7,
+                alignSelf: "center",
+              }}
+            >
+              <View
+                className="rounded-full bg-brand border-2 border-white"
+                style={{ width: scrubbing ? 18 : 14, height: scrubbing ? 18 : 14 }}
+              />
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -289,10 +494,13 @@ const VideoPage = memo(
     a.episode.number === b.episode.number &&
     a.active === b.active &&
     a.muted === b.muted &&
+    a.paused === b.paused &&
     a.controlsVisible === b.controlsVisible &&
     a.subtitlesOn === b.subtitlesOn &&
     a.cues === b.cues &&
     a.title === b.title &&
+    a.description === b.description &&
+    a.hashtags === b.hashtags &&
     a.viLabel === b.viLabel &&
     a.poster === b.poster &&
     a.episodeCount === b.episodeCount
@@ -312,7 +520,7 @@ export default function Watch() {
   const found = episodes.findIndex((e) => e.number === Number(ep || 1));
   const [index, setIndex] = useState(found < 0 ? 0 : found);
   const [drawer, setDrawer] = useState(false);
-  const [liked, setLiked] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const [muted, setMuted] = useState(false);
   const [subMode, setSubMode] = useState<"off" | "en" | "vi">("en");
   const [subsReady, setSubsReady] = useState(false); // true once subtitles asset is loaded
@@ -349,26 +557,48 @@ export default function Watch() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subMode, index, movie, subsReady]);
 
+  // Kick off the (lazy) Vietnamese synopsis translation so the on-video description can
+  // show in the user's language; no-op for English or once cached.
+  useEffect(() => {
+    if (movie) vi.ensureSynopsis(movie);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, state.language]);
+
+  // Up to 3 genres become #hashtags under the title. Memoised so the page's memo() doesn't
+  // see a new array each render and re-render every swipe.
+  const hashtags = useMemo(() => (movie ? (movie.genres || []).slice(0, 3) : []), [movie]);
+
   const cycleSub = () =>
     setSubMode((m) => (m === "en" ? "vi" : m === "vi" ? "off" : "en"));
-  const [controls, setControls] = useState(true); // TikTok-style: tap to reveal, auto-hide after 5s
+
+  // YouTube-style: all overlay (top bar + sidebar + info + scrubber) is hidden during
+  // playback and only appears on activity. A single tap toggles play/pause AND reveals the
+  // controls; while playing they auto-hide after a few seconds, while paused they stay up.
+  const [paused, setPaused] = useState(false);
+  const [controls, setControls] = useState(true);
+  const pausedRef = useRef(false);
+  pausedRef.current = paused;
 
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const armHide = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setControls(false), 5000);
+    if (pausedRef.current) return; // keep controls up while paused
+    hideTimer.current = setTimeout(() => setControls(false), 3500);
   }, []);
-  const toggleControls = useCallback(() => {
-    setControls((prev) => {
-      const next = !prev;
-      if (next) armHide();
-      else if (hideTimer.current) clearTimeout(hideTimer.current);
-      return next;
-    });
+  // Single tap: pause/play and reveal the controls.
+  const onTapVideo = useCallback(() => {
+    const next = !pausedRef.current;
+    pausedRef.current = next;
+    setPaused(next);
+    setControls(true);
+    armHide();
   }, [armHide]);
 
-  // Reveal controls (and re-arm the 5s timer) on mount and whenever the active episode changes.
+  // On mount and whenever the active episode changes: resume playback, reveal the controls,
+  // and re-arm their auto-hide.
   useEffect(() => {
+    setPaused(false);
+    pausedRef.current = false;
     setControls(true);
     armHide();
     return () => {
@@ -394,6 +624,29 @@ export default function Watch() {
   if (!movie || !episodes.length) return <View className="flex-1 bg-black" />;
 
   const fav = state.favorites.includes(movie.id);
+  const liked = state.likes.includes(movie.id);
+  const following = state.following.includes(movie.id);
+
+  // Social numbers: deterministic baselines from the catalog + the user's own actions.
+  const userComments = state.comments[movie.id] ?? [];
+  const seeds = seedComments(movie);
+  const mergedComments = [...userComments, ...seeds];
+  const likeCount = formatCount(baseLikes(movie) + (liked ? 1 : 0));
+  const commentCount = formatCount(mergedComments.length);
+  const saveCount = formatCount(movie.collectCount + (fav ? 1 : 0));
+  const description = vi.synopsis(movie);
+
+  const sendComment = (text: string) => {
+    const comment: Comment = {
+      id: `u-${Date.now()}`,
+      author: state.user.name,
+      avatarUrl: state.user.avatarUrl,
+      text,
+      createdAt: Date.now(),
+      likes: 0,
+    };
+    dispatch({ type: "addComment", movieId: movie.id, comment });
+  };
 
   // Guard a stale index (e.g. the screen reused for a shorter series) — episodes is
   // non-empty here, so falling back to episodes[0] keeps active.number from crashing.
@@ -440,6 +693,8 @@ export default function Watch() {
               active={i === index}
               muted={muted}
               title={displayTitle(vi.title(movie))}
+              description={description}
+              hashtags={hashtags}
               viLabel={viBadge(movie)}
               poster={movie.poster}
               cues={
@@ -456,8 +711,12 @@ export default function Watch() {
               subtitlesOn={subMode !== "off"}
               episodeCount={episodes.length}
               controlsVisible={controls}
-              onTap={toggleControls}
-              onLike={() => setLiked(true)}
+              paused={paused && i === index}
+              onTap={onTapVideo}
+              onLike={() => {
+                // Double-tap always likes (TikTok never un-likes on double-tap).
+                if (!liked) dispatch({ type: "toggleLike", movieId: movie.id });
+              }}
               onProgress={(pct) =>
                 dispatch({
                   type: "recordProgress",
@@ -473,7 +732,8 @@ export default function Watch() {
         }}
       />
 
-      {/* Immersive overlay — hidden in clean mode (tap video to reveal, auto-hides after 5s). */}
+      {/* Overlay — back / title / captions / mute + sidebar. Hidden during playback; revealed
+          on tap (which also pauses) and stays up while paused, then auto-hides while playing. */}
       {controls && (
         <>
           <View
@@ -520,11 +780,18 @@ export default function Watch() {
             )}
           </Pressable>
 
+          {/* Right action column — hidden together with the rest of the controls. */}
           <WatchSidebar
+            avatar={movie.poster}
+            following={following}
             liked={liked}
             favorited={fav}
-            likeCount={liked ? "12.5K" : "12.4K"}
-            onLike={() => setLiked((v) => !v)}
+            likeCount={likeCount}
+            commentCount={commentCount}
+            saveCount={saveCount}
+            onFollow={() => dispatch({ type: "toggleFollow", movieId: movie.id })}
+            onLike={() => dispatch({ type: "toggleLike", movieId: movie.id })}
+            onComment={() => setCommentsOpen(true)}
             onFavorite={() => dispatch({ type: "toggleFavorite", movieId: movie.id })}
             onShare={() => Share.share({ message: `${movie.title} on ShortFlix` })}
             onEpisodes={() => setDrawer(true)}
@@ -539,6 +806,15 @@ export default function Watch() {
         activeNumber={active.number}
         onClose={() => setDrawer(false)}
         onSelect={(n) => goTo(episodes.findIndex((e) => e.number === n))}
+      />
+
+      <CommentsSheet
+        visible={commentsOpen}
+        comments={mergedComments}
+        meAvatar={state.user.avatarUrl}
+        now={Date.now()}
+        onClose={() => setCommentsOpen(false)}
+        onSend={sendComment}
       />
     </View>
   );

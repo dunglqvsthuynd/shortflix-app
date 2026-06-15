@@ -50,4 +50,13 @@ export interface ContinueWatchingItem {
   updatedAt: number;
 }
 
+export interface Comment {
+  id: string;
+  author: string;
+  avatarUrl: string;
+  text: string;
+  createdAt: number;
+  likes: number;
+}
+
 export type Language = "en" | "vi";

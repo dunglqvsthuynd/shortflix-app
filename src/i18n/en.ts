@@ -4,7 +4,7 @@ const en = {
   home: { continueWatching: "Continue Watching", trending: "Trending Now", popular: "Most Popular", featured: "Featured", playNow: "Play Now", forYou: "For You" },
   discover: { title: "Discover", searchPlaceholder: "Search titles or genres", all: "All", dubbed: "Dubbed", noResults: "No results found" },
   detail: { watchNow: "Watch Now", episodes: "Episodes", addToList: "Add to My List", inList: "In My List", youMightLike: "You Might Like", cast: "Cast", tags: "Tags" },
-  watch: { chapter: "CHAPTER", of: "OF", episodesSelection: "Episodes Selection", watchNextIn: "Watch Next in 5s", watchNow: "Watch Now", share: "Share", episodes: "Episodes", season: "Season 1" },
+  watch: { chapter: "CHAPTER", of: "OF", episodesSelection: "Episodes Selection", watchNextIn: "Watch Next in 5s", watchNow: "Watch Now", share: "Share", episodes: "Episodes", season: "Season 1", follow: "Follow", following: "Following", commentsTitle: "comments", addComment: "Add a comment…", noComments: "No comments yet. Be the first!", locked: "LOCKED" },
   rewards: { title: "Daily Rewards", subtitle: "Check in daily to earn coins", day: "Day", claim: "Claim", claimed: "Claimed", today: "Today" },
   profile: { title: "Profile", wallet: "Coin Wallet", recharge: "Recharge", favorites: "My List", history: "History", settings: "Settings", logout: "Reset App", vip: "VIP Member", member: "Premium Member", empty: "Nothing here yet." },
   settings: { title: "Settings", language: "Language", reset: "Reset to defaults", resetConfirm: "Reset all data back to defaults?", back: "Back" },
