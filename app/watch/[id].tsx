@@ -683,7 +683,8 @@ export default function Watch() {
         showsVerticalScrollIndicator={false}
         // iOS delays touch delivery to content by ~150ms to first detect a scroll, which makes
         // the tap-to-pause feel laggy on iPhone. Deliver touches immediately so taps are snappy.
-        delaysContentTouches={false}
+        // (Valid ScrollView prop passed through FlatList; not in this RN version's FlatList types.)
+        {...({ delaysContentTouches: false } as object)}
         initialScrollIndex={index}
         getItemLayout={(_, i) => ({ length: height, offset: height * i, index: i })}
         onScrollToIndexFailed={({ index: i }) => {
