@@ -1,6 +1,10 @@
 name: iOS unsigned IPA
 on:
   workflow_dispatch:
+  push:
+    branches: [DungThuy]
+    paths-ignore:
+      - "**/*.md"
 jobs:
   build:
     runs-on: macos-latest
