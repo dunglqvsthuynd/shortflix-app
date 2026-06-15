@@ -1,7 +1,9 @@
 import "../global.css";
 import { useEffect } from "react";
+import { Platform, AppState } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import * as NavigationBar from "expo-navigation-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
@@ -63,12 +65,23 @@ export default function RootLayout() {
     if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});
   }, [fontsLoaded]);
 
+  // Immersive full-screen: hide the Android navigation bar (it stays hidden, swipe from the
+  // edge reveals it briefly). The status bar is hidden via <StatusBar hidden /> below.
+  // Re-hide on every return-to-foreground — Android re-shows the bar after backgrounding.
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const hide = () => NavigationBar.setVisibilityAsync("hidden").catch(() => {});
+    hide();
+    const sub = AppState.addEventListener("change", (s) => s === "active" && hide());
+    return () => sub.remove();
+  }, []);
+
   if (!fontsLoaded) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#000" }}>
       <SafeAreaProvider>
-        <StatusBar style="light" />
+        <StatusBar style="light" hidden />
         <AppStoreProvider>
           <Inner />
         </AppStoreProvider>
