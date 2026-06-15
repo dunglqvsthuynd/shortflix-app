@@ -395,7 +395,9 @@ export default function Watch() {
 
   const fav = state.favorites.includes(movie.id);
 
-  const active = episodes[index];
+  // Guard a stale index (e.g. the screen reused for a shorter series) — episodes is
+  // non-empty here, so falling back to episodes[0] keeps active.number from crashing.
+  const active = episodes[index] ?? episodes[0];
 
   return (
     <View className="flex-1 bg-black">
