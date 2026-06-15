@@ -10,9 +10,11 @@ module.exports = {
         surface: { DEFAULT: "#1c1b1b", 2: "#2a2a2a", line: "#353534" },
       },
       fontFamily: {
-        sans: ["Inter_400Regular"],
-        "sans-bold": ["Inter_700Bold"],
-        display: ["Montserrat_800ExtraBold"],
+        // Be Vietnam Pro renders stacked Vietnamese diacritics cleanly on Android
+        // (Inter/Montserrat clip them in tight line boxes).
+        sans: ["BeVietnamPro_400Regular"],
+        "sans-bold": ["BeVietnamPro_700Bold"],
+        display: ["BeVietnamPro_800ExtraBold"],
       },
     },
   },

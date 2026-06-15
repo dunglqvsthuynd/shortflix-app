@@ -1,11 +1,13 @@
+import { useEffect } from "react";
 import { ScrollView, View, Text, Pressable, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeft, Play, Plus, Check } from "lucide-react-native";
-import { getMovie, getEpisodes, allMovies } from "../../src/data/catalog";
+import { ArrowLeft, Play, Plus, Check, Star, Bookmark } from "lucide-react-native";
+import { getMovie, getEpisodes, recommendedFor, formatCount, isDubbed, displayTitle } from "../../src/data/catalog";
 import { useStore } from "../../src/store/AppStore";
 import { useT } from "../../src/i18n";
+import { useViCatalog } from "../../src/data/catalogVi";
 import { ScrimBottom } from "../../src/components/Scrim";
 import EpisodeGrid from "../../src/components/EpisodeGrid";
 import GenreChip from "../../src/components/GenreChip";
@@ -15,18 +17,19 @@ export default function Detail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { state, dispatch } = useStore();
   const { t } = useT();
+  const vi = useViCatalog();
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const posterH = Math.round(height * 0.52); // proportional hero, fits all screen sizes
   const movie = getMovie(String(id));
+  useEffect(() => {
+    if (movie) vi.ensureSynopsis(movie);
+  }, [movie, vi]);
   if (!movie) return <View className="flex-1 bg-black" />;
 
   const episodes = getEpisodes(movie.id);
   const fav = state.favorites.includes(movie.id);
-  const unlocked = state.unlockedEpisodes[movie.id] ?? [];
-  const recommended = allMovies()
-    .filter((m) => m.id !== movie.id && m.genres.some((g) => movie.genres.includes(g)))
-    .slice(0, 12);
+  const recommended = recommendedFor(movie, 12);
   // Resume from the last-watched episode of this movie, if any.
   const resumeEp = state.continueWatching.find((c) => c.movieId === movie.id)?.episodeNumber;
   const openWatch = (n?: number) =>
@@ -51,7 +54,26 @@ export default function Detail() {
           <ArrowLeft size={20} color="#fff" />
         </Pressable>
         <View className="absolute bottom-5 left-5 right-5">
-          <Text className="text-white text-3xl font-display tracking-tight">{movie.title}</Text>
+          {isDubbed(movie) && (
+            <View className="self-start bg-brand rounded px-2 py-0.5 mb-2">
+              <Text className="text-white text-[10px] font-sans-bold tracking-wide">LỒNG TIẾNG</Text>
+            </View>
+          )}
+          <Text className="text-white text-3xl font-display tracking-tight">{displayTitle(vi.title(movie))}</Text>
+          <View className="flex-row items-center mt-2 gap-4">
+            {!!movie.rating && (
+              <View className="flex-row items-center">
+                <Star size={14} color="#F5C518" fill="#F5C518" />
+                <Text className="text-white text-xs font-sans-bold ml-1">{movie.rating.toFixed(1)}</Text>
+              </View>
+            )}
+            {movie.collectCount > 0 && (
+              <View className="flex-row items-center">
+                <Bookmark size={13} color="#E5E2E1" />
+                <Text className="text-ink/80 text-xs ml-1">{formatCount(movie.collectCount)}</Text>
+              </View>
+            )}
+          </View>
           <View className="flex-row mt-3">
             {movie.genres.slice(0, 3).map((g) => (
               <GenreChip key={g} label={g} />
@@ -78,14 +100,41 @@ export default function Detail() {
         </Pressable>
       </View>
 
-      <Text className="text-ink/70 text-sm leading-relaxed px-5 mt-5">{movie.synopsis}</Text>
+      <Text className="text-ink/70 text-sm leading-relaxed px-5 mt-5">{vi.synopsis(movie)}</Text>
+
+      {!!movie.tags?.length && (
+        <View className="flex-row flex-wrap px-5 mt-4 gap-2">
+          {movie.tags.slice(0, 10).map((tag) => (
+            <View key={tag} className="bg-surface-2 rounded-full px-3 py-1 border border-white/10">
+              <Text className="text-ink/70 text-xs">{tag}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {!!movie.cast?.length && (
+        <View className="mt-6">
+          <Text className="text-ink text-lg font-sans-bold px-5 mb-3">{t("detail.cast")}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20 }}>
+            {movie.cast.map((actor) => (
+              <View key={actor.name} className="mr-4 items-center w-20">
+                <View className="w-16 h-16 rounded-full overflow-hidden bg-surface-2">
+                  {!!actor.pic && <Image source={actor.pic} style={{ flex: 1 }} contentFit="cover" />}
+                </View>
+                <Text numberOfLines={2} className="text-ink/70 text-[11px] text-center mt-1.5">
+                  {actor.name}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       <Text className="text-ink text-lg font-sans-bold px-5 mt-7 mb-3">
         {t("detail.episodes")} ({episodes.length})
       </Text>
       <EpisodeGrid
         episodes={episodes}
-        unlocked={unlocked}
         onPress={(n) => openWatch(n)}
       />
 

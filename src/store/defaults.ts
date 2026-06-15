@@ -17,6 +17,3 @@ export const DEFAULT_CHECK_IN: CheckInDay[] = [
   { day: 6, coins: 10, isClaimed: false },
   { day: 7, coins: 50, isClaimed: false, isSpecial: true },
 ];
-
-export const UNLOCK_ONE_COST = 10;
-export const UNLOCK_ALL_COST = 100;

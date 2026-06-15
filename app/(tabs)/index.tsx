@@ -1,26 +1,39 @@
+import { useEffect } from "react";
 import { ScrollView, View, Text, Pressable, FlatList, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { Play } from "lucide-react-native";
-import { allMovies, moviesByGenre, allGenres, getMovie } from "../../src/data/catalog";
+import { allMovies, moviesByGenre, allGenres, getMovie, topMovies } from "../../src/data/catalog";
 import { useStore } from "../../src/store/AppStore";
 import { useT } from "../../src/i18n";
 import Carousel from "../../src/components/Carousel";
 import { ScrimBottom } from "../../src/components/Scrim";
 import Badge from "../../src/components/Badge";
+import { useViCatalog } from "../../src/data/catalogVi";
 
 export default function Home() {
   const { state } = useStore();
   const { t } = useT();
+  const vi = useViCatalog();
   const { height } = useWindowDimensions();
   const bannerH = Math.round(height * 0.58); // proportional banner, fits all screen sizes
   const movies = allMovies();
   const featured = movies[0];
   const genres = allGenres().slice(0, 5);
+  // "Trending" ranks by rating (then collects) — a different signal from the
+  // collect-count "Most Popular" rail so the two rows aren't identical.
+  const trending = [...movies]
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || b.collectCount - a.collectCount)
+    .slice(0, 12);
 
   const cw = state.continueWatching
     .map((c) => ({ c, movie: getMovie(c.movieId) }))
     .filter((x) => x.movie);
+
+  // Translate the featured movie's synopsis when in Vietnamese.
+  useEffect(() => {
+    if (featured) vi.ensureSynopsis(featured);
+  }, [featured, vi]);
 
   return (
     <ScrollView
@@ -40,9 +53,9 @@ export default function Home() {
                 <Badge label={featured.badge} />
               </View>
             )}
-            <Text className="text-white text-3xl font-display tracking-tight">{featured.title}</Text>
+            <Text className="text-white text-3xl font-display tracking-tight">{vi.title(featured)}</Text>
             <Text numberOfLines={2} className="text-ink/70 text-xs mt-2 leading-relaxed">
-              {featured.synopsis}
+              {vi.synopsis(featured)}
             </Text>
             <Pressable
               onPress={() => router.push(`/watch/${featured.id}`)}
@@ -81,7 +94,7 @@ export default function Home() {
                   </View>
                 </View>
                 <Text numberOfLines={1} className="text-ink text-xs font-sans-bold mt-1.5">
-                  {item.movie!.title}
+                  {vi.title(item.movie!)}
                 </Text>
                 <Text className="text-ink/40 text-[10px]">
                   {t("watch.chapter")} {item.c.episodeNumber}
@@ -92,7 +105,8 @@ export default function Home() {
         </View>
       )}
 
-      <Carousel title={t("home.trending")} data={movies.slice(0, 12)} />
+      <Carousel title={t("home.trending")} data={trending} />
+      <Carousel title={t("home.popular")} data={topMovies(12)} />
 
       {genres.map((g) => (
         <Carousel key={g} title={g} data={moviesByGenre(g).slice(0, 12)} />

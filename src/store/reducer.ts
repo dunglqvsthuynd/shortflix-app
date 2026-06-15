@@ -4,7 +4,6 @@ import { DEFAULT_USER, DEFAULT_CHECK_IN } from "./defaults";
 export interface State {
   user: UserProfile;
   favorites: string[];
-  unlockedEpisodes: Record<string, number[]>;
   continueWatching: ContinueWatchingItem[];
   checkIn: CheckInDay[];
   language: Language;
@@ -14,7 +13,6 @@ export interface State {
 export const initialState: State = {
   user: DEFAULT_USER,
   favorites: [],
-  unlockedEpisodes: {},
   continueWatching: [],
   checkIn: DEFAULT_CHECK_IN,
   language: "en",
@@ -23,11 +21,8 @@ export const initialState: State = {
 
 export type Action =
   | { type: "hydrate"; state: Partial<State> }
-  | { type: "spendCoins"; amount: number }
   | { type: "addCoins"; amount: number }
   | { type: "toggleFavorite"; movieId: string }
-  | { type: "unlockEpisode"; movieId: string; number: number }
-  | { type: "unlockAll"; movieId: string; numbers: number[] }
   | { type: "recordProgress"; movieId: string; episodeNumber: number; progress: number; now: number }
   | { type: "claimReward"; day: number }
   | { type: "setLanguage"; lang: Language }
@@ -37,9 +32,6 @@ export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "hydrate":
       return { ...state, ...action.state, hydrated: true };
-    case "spendCoins":
-      if (state.user.coins < action.amount) return state;
-      return { ...state, user: { ...state.user, coins: state.user.coins - action.amount } };
     case "addCoins":
       return { ...state, user: { ...state.user, coins: state.user.coins + action.amount } };
     case "toggleFavorite":
@@ -48,19 +40,6 @@ export function reducer(state: State, action: Action): State {
         favorites: state.favorites.includes(action.movieId)
           ? state.favorites.filter((id) => id !== action.movieId)
           : [...state.favorites, action.movieId],
-      };
-    case "unlockEpisode": {
-      const cur = state.unlockedEpisodes[action.movieId] ?? [];
-      if (cur.includes(action.number)) return state;
-      return {
-        ...state,
-        unlockedEpisodes: { ...state.unlockedEpisodes, [action.movieId]: [...cur, action.number] },
-      };
-    }
-    case "unlockAll":
-      return {
-        ...state,
-        unlockedEpisodes: { ...state.unlockedEpisodes, [action.movieId]: action.numbers },
       };
     case "recordProgress": {
       const rest = state.continueWatching.filter((c) => c.movieId !== action.movieId);

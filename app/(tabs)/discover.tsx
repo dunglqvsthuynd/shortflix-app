@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { View, Text, TextInput, FlatList, ScrollView, useWindowDimensions } from "react-native";
 import { Search } from "lucide-react-native";
-import { allMovies, allGenres, searchMovies } from "../../src/data/catalog";
+import { allMovies, allGenres, searchMovies, isDubbed } from "../../src/data/catalog";
 import { useT } from "../../src/i18n";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PosterCard from "../../src/components/PosterCard";
@@ -16,13 +16,15 @@ export default function Discover() {
   const cardW = Math.floor((width - PAD * 2 - GAP * 2) / 3); // 3 columns, responsive
   const [q, setQ] = useState("");
   const [genre, setGenre] = useState<string>("");
+  const [dubOnly, setDubOnly] = useState(false);
   const genres = useMemo(() => allGenres().slice(0, 14), []);
 
   const results = useMemo(() => {
     let list = q ? searchMovies(q) : allMovies();
     if (genre) list = list.filter((m) => m.genres.includes(genre));
+    if (dubOnly) list = list.filter(isDubbed);
     return list;
-  }, [q, genre]);
+  }, [q, genre, dubOnly]);
 
   return (
     <View className="flex-1 bg-black" style={{ paddingTop: insets.top + 12 }}>
@@ -42,10 +44,12 @@ export default function Discover() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20 }}
-        className="mb-3 max-h-12"
+        contentContainerStyle={{ paddingHorizontal: 20, alignItems: "center" }}
+        style={{ flexGrow: 0 }}
+        className="mb-3"
       >
         <GenreChip label={t("discover.all")} active={!genre} onPress={() => setGenre("")} />
+        <GenreChip label={t("discover.dubbed")} active={dubOnly} onPress={() => setDubOnly((v) => !v)} />
         {genres.map((g) => (
           <GenreChip key={g} label={g} active={genre === g} onPress={() => setGenre(g)} />
         ))}
@@ -58,6 +62,11 @@ export default function Discover() {
         columnWrapperStyle={{ paddingHorizontal: PAD, gap: GAP }}
         contentContainerStyle={{ paddingBottom: 120, rowGap: 14 }}
         renderItem={({ item }) => <PosterCard movie={item} width={cardW} grid />}
+        // Keep the 770-item grid light: render a few screens ahead, recycle far rows.
+        initialNumToRender={12}
+        maxToRenderPerBatch={9}
+        windowSize={5}
+        removeClippedSubviews
         ListEmptyComponent={
           <Text className="text-ink/40 text-center mt-20">{t("discover.noResults")}</Text>
         }

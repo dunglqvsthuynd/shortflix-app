@@ -16,7 +16,12 @@ export default function GenreChip({
         active ? "bg-brand border-brand" : "bg-surface-2 border-white/5"
       }`}
     >
-      <Text className={`text-xs font-sans-bold ${active ? "text-white" : "text-ink/70"}`}>{label}</Text>
+      <Text
+        style={{ lineHeight: 18 }}
+        className={`text-xs font-sans-bold ${active ? "text-white" : "text-ink/70"}`}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }

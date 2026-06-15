@@ -15,22 +15,39 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowLeft, Volume2, VolumeX, Heart, Captions } from "lucide-react-native";
-import { getMovie, getEpisodes, getSubtitles, loadMovieSubtitles, Cue } from "../../src/data/catalog";
+import {
+  getMovie,
+  getEpisodes,
+  getSubtitles,
+  loadMovieSubtitles,
+  hasViSubtitles,
+  loadMovieSubtitlesVi,
+  getViSubtitles,
+  isDubbed,
+  displayTitle,
+  Cue,
+} from "../../src/data/catalog";
 import { translateCues } from "../../src/data/translate";
 import { useStore } from "../../src/store/AppStore";
 import { useT } from "../../src/i18n";
+import { useViCatalog } from "../../src/data/catalogVi";
 import { Episode } from "../../src/types";
 import { ScrimTop } from "../../src/components/Scrim";
 import WatchSidebar from "../../src/components/WatchSidebar";
 import EpisodesDrawer from "../../src/components/EpisodesDrawer";
-import UnlockModal from "../../src/components/UnlockModal";
-import { UNLOCK_ONE_COST, UNLOCK_ALL_COST } from "../../src/store/defaults";
+
+// timeUpdate only fires ~3×/sec (every timeUpdateEventInterval), so the active cue is
+// recomputed on a coarse grid and shows up to one interval late — which reads as the
+// subtitle lagging the audio. Match cues against a slightly future time to cancel that
+// quantization lag so lines land on the speech. Tune if subs feel early/late.
+const SUBTITLE_LEAD_S = 0.35;
 
 function VideoPageBase({
   episode,
   active,
   muted,
   title,
+  dubbed,
   poster,
   cues,
   subtitlesOn,
@@ -45,6 +62,7 @@ function VideoPageBase({
   active: boolean;
   muted: boolean;
   title: string;
+  dubbed: boolean;
   poster: string;
   cues: Cue[] | null;
   subtitlesOn: boolean;
@@ -100,9 +118,11 @@ function VideoPageBase({
         setPct(rp);
       }
 
-      // Active subtitle cue for the current time (cues sorted by start).
+      // Active subtitle cue for the current time (cues sorted by start). Look slightly
+      // ahead (SUBTITLE_LEAD_S) so the line appears on the speech instead of one
+      // timeUpdate tick behind it.
       if (cues && cues.length) {
-        const cs = cur * 100;
+        const cs = (cur + SUBTITLE_LEAD_S) * 100;
         const hit = cues.find((c) => cs >= c[0] && cs <= c[1]);
         setCue((prev) => (hit ? (prev === hit[2] ? prev : hit[2]) : prev === "" ? prev : ""));
       }
@@ -229,6 +249,11 @@ function VideoPageBase({
           style={{ bottom: insets.bottom + 80 }}
           pointerEvents="none"
         >
+          {dubbed && (
+            <View className="self-start bg-brand rounded px-2 py-0.5 mb-1.5">
+              <Text className="text-white text-[10px] font-sans-bold tracking-wide">LỒNG TIẾNG</Text>
+            </View>
+          )}
           <Text className="text-white text-xl font-display" numberOfLines={2}>
             {title}
           </Text>
@@ -262,6 +287,7 @@ const VideoPage = memo(
     a.subtitlesOn === b.subtitlesOn &&
     a.cues === b.cues &&
     a.title === b.title &&
+    a.dubbed === b.dubbed &&
     a.poster === b.poster &&
     a.episodeCount === b.episodeCount
 );
@@ -270,6 +296,7 @@ export default function Watch() {
   const { id, ep } = useLocalSearchParams<{ id: string; ep?: string }>();
   const { state, dispatch } = useStore();
   const { t } = useT();
+  const vi = useViCatalog();
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const movie = getMovie(String(id));
@@ -283,18 +310,23 @@ export default function Watch() {
   const [muted, setMuted] = useState(false);
   const [subMode, setSubMode] = useState<"off" | "en" | "vi">("en");
   const [subsReady, setSubsReady] = useState(false); // true once subtitles asset is loaded
+  const [viSubsReady, setViSubsReady] = useState(false); // true once native VI asset is loaded
   const [viCache, setViCache] = useState<Record<number, Cue[]>>({});
-  const [pending, setPending] = useState<number | null>(null);
+
+  // This movie ships native (site-provided) Vietnamese subtitles — prefer them over MT.
+  const nativeVi = hasViSubtitles(String(id));
 
   useEffect(() => {
     loadMovieSubtitles(String(id))
       .then(() => setSubsReady(true))
       .catch(() => {});
-  }, [id]);
+    if (nativeVi) loadMovieSubtitlesVi(String(id)).then(() => setViSubsReady(true)).catch(() => {});
+  }, [id, nativeVi]);
 
-  // When Vietnamese subtitles are active, translate the current episode on demand (cached).
+  // Vietnamese subtitles: native ones load directly above. For movies without them,
+  // translate the current episode's English cues on demand (cached).
   useEffect(() => {
-    if (subMode !== "vi" || !movie) return;
+    if (subMode !== "vi" || !movie || nativeVi) return;
     const ep = episodes[index];
     if (!ep || viCache[ep.number]) return;
     const en = getSubtitles(movie.id, ep.number);
@@ -338,25 +370,15 @@ export default function Watch() {
     };
   }, [index, armHide]);
 
-  const unlocked = state.unlockedEpisodes[String(id)] ?? [];
-  const isUnlocked = useCallback(
-    (e: Episode) => e.isFree || unlocked.includes(e.number),
-    [unlocked]
-  );
-
   const goTo = useCallback(
     (targetIndex: number) => {
       const target = episodes[targetIndex];
       if (!target) return;
-      if (!isUnlocked(target)) {
-        setPending(targetIndex);
-        return;
-      }
       listRef.current?.scrollToIndex({ index: targetIndex, animated: true });
       setIndex(targetIndex);
       setDrawer(false);
     },
-    [episodes, isUnlocked]
+    [episodes]
   );
 
   const onViewable = useRef(({ viewableItems }: any) => {
@@ -366,28 +388,6 @@ export default function Watch() {
   if (!movie || !episodes.length) return <View className="flex-1 bg-black" />;
 
   const fav = state.favorites.includes(movie.id);
-
-  const confirmUnlock = () => {
-    if (pending == null) return;
-    const target = episodes[pending];
-    if (state.user.coins < UNLOCK_ONE_COST) {
-      setPending(null);
-      return;
-    }
-    dispatch({ type: "spendCoins", amount: UNLOCK_ONE_COST });
-    dispatch({ type: "unlockEpisode", movieId: movie.id, number: target.number });
-    const ti = pending;
-    setPending(null);
-    listRef.current?.scrollToIndex({ index: ti, animated: true });
-    setIndex(ti);
-    setDrawer(false);
-  };
-
-  const unlockAll = () => {
-    if (state.user.coins < UNLOCK_ALL_COST) return;
-    dispatch({ type: "spendCoins", amount: UNLOCK_ALL_COST });
-    dispatch({ type: "unlockAll", movieId: movie.id, numbers: episodes.map((e) => e.number) });
-  };
 
   const active = episodes[index];
 
@@ -411,17 +411,36 @@ export default function Watch() {
         windowSize={3}
         maxToRenderPerBatch={1}
         removeClippedSubviews
-        renderItem={({ item, index: i }) =>
-          isUnlocked(item) ? (
+        renderItem={({ item, index: i }) => {
+          // Only mount a real player for the active page and the next one (preload), so
+          // we never have more than ~2 HLS streams decoding at once — the main source of
+          // jank when swiping. Other pages just show the poster until they come near.
+          if (i !== index && i !== index + 1) {
+            return (
+              <View style={{ height }} className="bg-black">
+                <Image
+                  source={movie.poster}
+                  style={{ width: "100%", height: "100%" }}
+                  contentFit="cover"
+                />
+              </View>
+            );
+          }
+          return (
             <VideoPage
               episode={item}
               active={i === index}
               muted={muted}
-              title={movie.title}
+              title={displayTitle(vi.title(movie))}
+              dubbed={isDubbed(movie)}
               poster={movie.poster}
               cues={
                 subMode === "vi"
-                  ? viCache[item.number] ?? null
+                  ? nativeVi
+                    ? viSubsReady
+                      ? getViSubtitles(movie.id, item.number)
+                      : null
+                    : viCache[item.number] ?? null
                   : subMode === "en"
                   ? getSubtitles(movie.id, item.number)
                   : null
@@ -442,23 +461,8 @@ export default function Watch() {
               }
               onEnd={() => goTo(i + 1)}
             />
-          ) : (
-            <Pressable
-              onPress={() => setPending(i)}
-              style={{ height }}
-              className="bg-black items-center justify-center"
-            >
-              <Image
-                source={item.thumbnail}
-                style={{ position: "absolute", width: "100%", height: "100%", opacity: 0.4 }}
-                contentFit="cover"
-              />
-              <Text className="text-white font-display">
-                {t("unlock.title")} {item.number}
-              </Text>
-            </Pressable>
-          )
-        }
+          );
+        }}
       />
 
       {/* Immersive overlay — hidden in clean mode (tap video to reveal, auto-hides after 5s). */}
@@ -522,20 +526,11 @@ export default function Watch() {
 
       <EpisodesDrawer
         visible={drawer}
-        title={movie.title}
+        title={vi.title(movie)}
         episodes={episodes}
-        unlocked={unlocked}
         activeNumber={active.number}
         onClose={() => setDrawer(false)}
         onSelect={(n) => goTo(episodes.findIndex((e) => e.number === n))}
-        onUnlockAll={unlockAll}
-      />
-
-      <UnlockModal
-        visible={pending != null}
-        episodeNumber={pending != null ? episodes[pending].number : 0}
-        onCancel={() => setPending(null)}
-        onConfirm={confirmUnlock}
       />
     </View>
   );

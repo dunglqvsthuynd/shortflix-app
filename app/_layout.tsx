@@ -6,10 +6,15 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
 import * as Localization from "expo-localization";
-import { useFonts, Inter_400Regular, Inter_700Bold } from "@expo-google-fonts/inter";
-import { Montserrat_800ExtraBold } from "@expo-google-fonts/montserrat";
+import {
+  useFonts,
+  BeVietnamPro_400Regular,
+  BeVietnamPro_700Bold,
+  BeVietnamPro_800ExtraBold,
+} from "@expo-google-fonts/be-vietnam-pro";
 import { AppStoreProvider, useStore } from "../src/store/AppStore";
 import { LanguageProvider } from "../src/i18n";
+import { ViCatalogProvider } from "../src/data/catalogVi";
 import { Language } from "../src/types";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -28,25 +33,31 @@ function Inner() {
 
   return (
     <LanguageProvider lang={state.language}>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: "#000" },
-          animation: "fade",
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="detail/[id]" options={{ animation: "slide_from_right" }} />
-        <Stack.Screen name="watch/[id]" options={{ animation: "slide_from_bottom" }} />
-        <Stack.Screen name="settings" options={{ animation: "slide_from_right" }} />
-      </Stack>
+      <ViCatalogProvider>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: "#000" },
+            animation: "fade",
+          }}
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="detail/[id]" options={{ animation: "slide_from_right" }} />
+          <Stack.Screen name="watch/[id]" options={{ animation: "slide_from_bottom" }} />
+          <Stack.Screen name="settings" options={{ animation: "slide_from_right" }} />
+        </Stack>
+      </ViCatalogProvider>
     </LanguageProvider>
   );
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_700Bold, Montserrat_800ExtraBold });
+  const [fontsLoaded] = useFonts({
+    BeVietnamPro_400Regular,
+    BeVietnamPro_700Bold,
+    BeVietnamPro_800ExtraBold,
+  });
 
   useEffect(() => {
     if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});
