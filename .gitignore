@@ -16,3 +16,10 @@ scripts/vi-*.json
 
 # Data backups
 *.bak
+
+# iOS signing credentials (never commit certs/profiles/passwords)
+credentials.json
+credentials/
+*.p12
+*.mobileprovision
+*.cer
