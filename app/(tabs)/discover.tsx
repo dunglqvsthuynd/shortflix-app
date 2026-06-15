@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { View, Text, TextInput, FlatList, ScrollView, useWindowDimensions } from "react-native";
 import { Search } from "lucide-react-native";
-import { allMovies, allGenres, searchMovies, isDubbed } from "../../src/data/catalog";
+import { allMovies, allGenres, searchMovies, isVietnamese } from "../../src/data/catalog";
 import { useT } from "../../src/i18n";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PosterCard from "../../src/components/PosterCard";
@@ -22,7 +22,7 @@ export default function Discover() {
   const results = useMemo(() => {
     let list = q ? searchMovies(q) : allMovies();
     if (genre) list = list.filter((m) => m.genres.includes(genre));
-    if (dubOnly) list = list.filter(isDubbed);
+    if (dubOnly) list = list.filter(isVietnamese);
     return list;
   }, [q, genre, dubOnly]);
 

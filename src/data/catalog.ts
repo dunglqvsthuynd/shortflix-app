@@ -34,6 +34,14 @@ export function isDubbed(m: Movie): boolean {
   return !!m.dubbed || /dubbed|lồng tiếng/i.test(m.title);
 }
 
+/** Vietnamese-language content: VI-dubbed (VI audio) plus the native VI catalog
+ *  (VI titles/subtitles). Grouped under the "Lồng tiếng" filter. Note: this deliberately
+ *  excludes English-"dubbed" alternates (English audio) that isDubbed()'s regex matches —
+ *  only the scraper's `dubbed` flag (VI) and `viNative` count as Vietnamese. */
+export function isVietnamese(m: Movie): boolean {
+  return !!m.viNative || !!m.dubbed;
+}
+
 // The "[lồng tiếng]" prefix eats most of a narrow card's single title line, hiding the
 // real name behind an ellipsis. Strip it for display (the dub status is shown separately
 // as a badge) so the actual title is what gets the space.
