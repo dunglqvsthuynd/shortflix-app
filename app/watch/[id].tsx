@@ -166,9 +166,25 @@ function VideoPageBase({
     else player.pause();
   }, [active, paused, player]);
 
+  // Only the active page is ever audible. Non-active pages (the preloaded next page, or a
+  // page mid-release while swiping) are force-muted so two videos can never play sound at
+  // once — even during the brief window where an off-screen player hasn't released yet.
   useEffect(() => {
-    player.muted = muted;
-  }, [muted, player]);
+    player.muted = muted || !active;
+  }, [muted, active, player]);
+
+  // Stop playback immediately when this page unmounts. expo-video releases the player on
+  // unmount, but the native release can lag a beat (ExoPlayer); pausing first guarantees the
+  // audio cuts the moment the page leaves the window instead of bleeding into the next video.
+  useEffect(() => {
+    return () => {
+      try {
+        player.pause();
+      } catch {
+        // player already released
+      }
+    };
+  }, [player]);
 
   useEffect(() => {
     const status = player.addListener("statusChange", (e: { status: string }) => {
