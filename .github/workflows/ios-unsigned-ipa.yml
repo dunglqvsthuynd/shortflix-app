@@ -3,7 +3,9 @@ on:
   workflow_dispatch:
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-26
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Select newest Xcode (needs Swift 6.2 for Expo/RN)
