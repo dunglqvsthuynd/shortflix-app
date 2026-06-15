@@ -28,18 +28,21 @@ function dedupeById(list: Movie[]): Movie[] {
   return out;
 }
 
-/** Dubbed alternates: English ("...(English-dubbed)") or Vietnamese ("[lồng tiếng] ...").
- *  Vietnamese-dubbed entries also carry an explicit `dubbed` flag from the scraper. */
-export function isDubbed(m: Movie): boolean {
-  return !!m.dubbed || /dubbed|lồng tiếng/i.test(m.title);
-}
-
 /** Vietnamese-language content: VI-dubbed (VI audio) plus the native VI catalog
- *  (VI titles/subtitles). Grouped under the "Lồng tiếng" filter. Note: this deliberately
- *  excludes English-"dubbed" alternates (English audio) that isDubbed()'s regex matches —
- *  only the scraper's `dubbed` flag (VI) and `viNative` count as Vietnamese. */
+ *  (VI titles/subtitles). Grouped under the "Lồng tiếng" filter. Keyed off the scraper's
+ *  `dubbed` flag (VI-only) and `viNative` — NOT a title regex — so English-"dubbed"
+ *  alternates (English audio whose title merely contains "dubbed") are excluded. */
 export function isVietnamese(m: Movie): boolean {
   return !!m.viNative || !!m.dubbed;
+}
+
+/** Which Vietnamese badge a card/title should carry:
+ *  "dub" = Vietnamese audio (LỒNG TIẾNG), "sub" = native VI catalog with VI subtitles
+ *  (PHỤ ĐỀ), null = English content. */
+export function viBadge(m: Movie): "dub" | "sub" | null {
+  if (m.dubbed) return "dub";
+  if (m.viNative) return "sub";
+  return null;
 }
 
 // The "[lồng tiếng]" prefix eats most of a narrow card's single title line, hiding the

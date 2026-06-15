@@ -23,7 +23,7 @@ import {
   hasViSubtitles,
   loadMovieSubtitlesVi,
   getViSubtitles,
-  isDubbed,
+  viBadge,
   displayTitle,
   Cue,
 } from "../../src/data/catalog";
@@ -47,7 +47,7 @@ function VideoPageBase({
   active,
   muted,
   title,
-  dubbed,
+  viLabel,
   poster,
   cues,
   subtitlesOn,
@@ -62,7 +62,7 @@ function VideoPageBase({
   active: boolean;
   muted: boolean;
   title: string;
-  dubbed: boolean;
+  viLabel: "dub" | "sub" | null;
   poster: string;
   cues: Cue[] | null;
   subtitlesOn: boolean;
@@ -249,9 +249,15 @@ function VideoPageBase({
           style={{ bottom: insets.bottom + 80 }}
           pointerEvents="none"
         >
-          {dubbed && (
-            <View className="self-start bg-brand rounded px-2 py-0.5 mb-1.5">
-              <Text className="text-white text-[10px] font-sans-bold tracking-wide">LỒNG TIẾNG</Text>
+          {viLabel && (
+            <View
+              className={`self-start rounded px-2 py-0.5 mb-1.5 ${
+                viLabel === "dub" ? "bg-brand" : "bg-black/70"
+              }`}
+            >
+              <Text className="text-white text-[10px] font-sans-bold tracking-wide">
+                {viLabel === "dub" ? "LỒNG TIẾNG" : "PHỤ ĐỀ"}
+              </Text>
             </View>
           )}
           <Text className="text-white text-xl font-display" numberOfLines={2}>
@@ -287,7 +293,7 @@ const VideoPage = memo(
     a.subtitlesOn === b.subtitlesOn &&
     a.cues === b.cues &&
     a.title === b.title &&
-    a.dubbed === b.dubbed &&
+    a.viLabel === b.viLabel &&
     a.poster === b.poster &&
     a.episodeCount === b.episodeCount
 );
@@ -432,7 +438,7 @@ export default function Watch() {
               active={i === index}
               muted={muted}
               title={displayTitle(vi.title(movie))}
-              dubbed={isDubbed(movie)}
+              viLabel={viBadge(movie)}
               poster={movie.poster}
               cues={
                 subMode === "vi"

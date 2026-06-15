@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowLeft, Play, Plus, Check, Star, Bookmark } from "lucide-react-native";
-import { getMovie, getEpisodes, recommendedFor, formatCount, isDubbed, displayTitle } from "../../src/data/catalog";
+import { getMovie, getEpisodes, recommendedFor, formatCount, viBadge, displayTitle } from "../../src/data/catalog";
 import { useStore } from "../../src/store/AppStore";
 import { useT } from "../../src/i18n";
 import { useViCatalog } from "../../src/data/catalogVi";
@@ -54,9 +54,15 @@ export default function Detail() {
           <ArrowLeft size={20} color="#fff" />
         </Pressable>
         <View className="absolute bottom-5 left-5 right-5">
-          {isDubbed(movie) && (
-            <View className="self-start bg-brand rounded px-2 py-0.5 mb-2">
-              <Text className="text-white text-[10px] font-sans-bold tracking-wide">LỒNG TIẾNG</Text>
+          {viBadge(movie) && (
+            <View
+              className={`self-start rounded px-2 py-0.5 mb-2 ${
+                viBadge(movie) === "dub" ? "bg-brand" : "bg-black/70"
+              }`}
+            >
+              <Text className="text-white text-[10px] font-sans-bold tracking-wide">
+                {viBadge(movie) === "dub" ? "LỒNG TIẾNG" : "PHỤ ĐỀ"}
+              </Text>
             </View>
           )}
           <Text className="text-white text-3xl font-display tracking-tight">{displayTitle(vi.title(movie))}</Text>

@@ -5,7 +5,7 @@ import { router } from "expo-router";
 import { Star } from "lucide-react-native";
 import { Movie } from "../types";
 import { useViCatalog } from "../data/catalogVi";
-import { isDubbed, displayTitle } from "../data/catalog";
+import { viBadge, displayTitle } from "../data/catalog";
 import Badge from "./Badge";
 
 function PosterCardBase({
@@ -18,7 +18,7 @@ function PosterCardBase({
   grid?: boolean;
 }) {
   const vi = useViCatalog();
-  const dub = isDubbed(movie);
+  const badge = viBadge(movie);
   const title = displayTitle(vi.title(movie));
   return (
     <Pressable
@@ -39,9 +39,15 @@ function PosterCardBase({
             <Text className="text-white text-[10px] font-sans-bold ml-1">{movie.rating.toFixed(1)}</Text>
           </View>
         )}
-        {dub && (
-          <View className="absolute bottom-2 left-2 bg-brand rounded px-1.5 py-0.5">
-            <Text className="text-white text-[9px] font-sans-bold tracking-wide">LỒNG TIẾNG</Text>
+        {badge && (
+          <View
+            className={`absolute bottom-2 left-2 rounded px-1.5 py-0.5 ${
+              badge === "dub" ? "bg-brand" : "bg-black/70"
+            }`}
+          >
+            <Text className="text-white text-[9px] font-sans-bold tracking-wide">
+              {badge === "dub" ? "LỒNG TIẾNG" : "PHỤ ĐỀ"}
+            </Text>
           </View>
         )}
       </View>
