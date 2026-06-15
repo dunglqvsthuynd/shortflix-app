@@ -287,6 +287,11 @@ function VideoPageBase({
   // responder-termination fight a raw PanResponder runs into). runOnJS so the callbacks can
   // touch React state / the player directly. Single tap = play/pause, double tap = like,
   // long-press = 2× with vertical-swipe lock/unlock.
+  //
+  // These run SIMULTANEOUSLY, not Exclusive: an exclusive single-tap has to wait ~half a
+  // second to rule out a double-tap before firing, which makes play/pause feel laggy/dead.
+  // Firing the single tap immediately keeps pause snappy (like TikTok); the cost is that a
+  // double-tap-to-like toggles pause twice (net no change) — a barely-visible flicker.
   const gesture = useMemo(() => {
     const single = Gesture.Tap()
       .runOnJS(true)
@@ -325,7 +330,7 @@ function VideoPageBase({
         }
       })
       .onFinalize(() => release2x());
-    return Gesture.Exclusive(dbl, hold, single);
+    return Gesture.Simultaneous(hold, dbl, single);
   }, [onTap, onLike, burstHeart, engage2x, release2x]);
 
   // Reset speed when this page is no longer the active one (swiped away while locked).
