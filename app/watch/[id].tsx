@@ -73,6 +73,7 @@ function VideoPageBase({
   const [buffering, setBuffering] = useState(true);
   const [pct, setPct] = useState(0);
   const lastReported = useRef(-1);
+  const pctShown = useRef(-1);
 
   useEffect(() => {
     if (active) player.play();
@@ -91,7 +92,13 @@ function VideoPageBase({
       const cur = e.currentTime ?? 0;
       const dur = player.duration || episode.duration || 1;
       const p = Math.min(100, (cur / dur) * 100);
-      setPct(p);
+      // Only re-render the progress bar when the whole-percent changes (not every tick),
+      // so the ~3/sec timeUpdate doesn't churn re-renders and stutter playback.
+      const rp = Math.round(p);
+      if (rp !== pctShown.current) {
+        pctShown.current = rp;
+        setPct(rp);
+      }
 
       // Active subtitle cue for the current time (cues sorted by start).
       if (cues && cues.length) {
