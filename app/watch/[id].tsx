@@ -161,7 +161,19 @@ function VideoPageBase({
     })
   ).current;
 
+  // When a page first becomes the focused one, restart it from 0 so it never opens "already
+  // a minute in" if its preloaded player happened to drift forward in the background. Guarded
+  // by a transition ref so a plain pause→resume (tap to play) does NOT rewind the video.
+  const wasActiveRef = useRef(active);
   useEffect(() => {
+    if (active && !wasActiveRef.current) {
+      try {
+        player.currentTime = 0;
+      } catch {
+        // player not ready yet
+      }
+    }
+    wasActiveRef.current = active;
     if (active && !paused) player.play();
     else player.pause();
   }, [active, paused, player]);
@@ -189,8 +201,30 @@ function VideoPageBase({
   useEffect(() => {
     const status = player.addListener("statusChange", (e: { status: string }) => {
       setBuffering(e.status === "loading" || e.status === "idle");
+      // A preloaded/off-screen player can begin advancing on its own once it finishes loading
+      // (pause() called before it was ready doesn't stick). Re-pause any non-active page the
+      // moment its status changes so only the focused video ever actually plays.
+      if (!active) {
+        try {
+          player.pause();
+        } catch {
+          // player not ready / released
+        }
+      }
     });
     const time = player.addListener("timeUpdate", (e: { currentTime: number }) => {
+      // timeUpdate only fires while a player is actually advancing. If a NON-active page reports
+      // time, its preloaded player slipped into playing in the background — stop it at once so
+      // the next video isn't already part-way through when the user swipes to it. (Buffering
+      // continues while paused, so we keep the preload benefit without the runaway playback.)
+      if (!active) {
+        try {
+          player.pause();
+        } catch {
+          // released
+        }
+        return;
+      }
       const cur = e.currentTime ?? 0;
       const d = player.duration || episode.duration || 1;
       // Publish the real duration once known so the scrubber's time labels are correct.
@@ -214,7 +248,6 @@ function VideoPageBase({
         setCue((prev) => (hit ? (prev === hit[2] ? prev : hit[2]) : prev === "" ? prev : ""));
       }
 
-      if (!active) return;
       const rounded = Math.round(p);
       // Only report every ~2% to avoid a state/persist update every second.
       if (Math.abs(rounded - lastReported.current) >= 2) {
