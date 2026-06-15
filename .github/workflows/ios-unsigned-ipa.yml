@@ -1,60 +1,32 @@
 name: iOS unsigned IPA
-
-  # Builds an UNSIGNED .ipa on a macOS runner so it can be signed on-device with
-  # eSign/AltStore/Sideloadly. No Apple account or signing certificates needed.
   on:
     workflow_dispatch:
-
   jobs:
     build:
       runs-on: macos-latest
       steps:
         - uses: actions/checkout@v4
-
         - uses: actions/setup-node@v4
           with:
             node-version: 20
             cache: npm
-
-        - name: Install JS dependencies
-          run: npm ci
-
-        - name: Generate the iOS project (expo prebuild)
-          run: npx expo prebuild --platform ios --no-install
-
-        - name: Install CocoaPods
+        - run: npm ci
+        - run: npx expo prebuild --platform ios --no-install
+        - run: pod install
           working-directory: ios
-          run: pod install
-
-        - name: Build unsigned archive
+        - name: Build unsigned IPA
           working-directory: ios
           run: |
-            set -eo pipefail
             WS=$(ls -d *.xcworkspace | head -1)
             SCHEME=$(basename "$WS" .xcworkspace)
-            echo "Workspace=$WS  Scheme=$SCHEME"
-            xcodebuild \
-              -workspace "$WS" \
-              -scheme "$SCHEME" \
-              -configuration Release \
-              -sdk iphoneos \
-              -destination 'generic/platform=iOS' \
-              -archivePath "$PWD/build/App.xcarchive" \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGN_IDENTITY="" \
-              archive
-
-        - name: Package into an unsigned .ipa
-          working-directory: ios/build
-          run: |
-            set -e
-            APP=$(ls -d App.xcarchive/Products/Applications/*.app | head -1)
-            mkdir -p Payload
-            cp -R "$APP" Payload/
-            zip -qry ShortFlix-unsigned.ipa Payload
-            ls -la ShortFlix-unsigned.ipa
-
+            echo "Workspace=$WS Scheme=$SCHEME"
+            xcodebuild -workspace "$WS" -scheme "$SCHEME" -configuration Release -sdk iphoneos -destination
+  'generic/platform=iOS' -archivePath "$PWD/build/App.xcarchive" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+  CODE_SIGN_IDENTITY="" archive
+            APP=$(ls -d build/App.xcarchive/Products/Applications/*.app | head -1)
+            mkdir -p build/Payload
+            cp -R "$APP" build/Payload/
+            (cd build && zip -qry ShortFlix-unsigned.ipa Payload)
         - uses: actions/upload-artifact@v4
           with:
             name: ShortFlix-unsigned-ipa
